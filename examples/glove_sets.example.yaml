@@ -1,0 +1,44 @@
+# 手套组注册表样例 —— 拷到 ~/.config/revohuman/glove_sets.yaml 后按实测值改，
+# 或放在别处用 $REVOHUMAN_REGISTRY 指过去。
+#
+# 这份文件回答的唯一问题是「哪个 USB 插口上的手套单元是哪只手」。
+# MCU 序列号带 L/R（BCRH1PL… / BCRH1TR… 等，早期批次 BCRH1L… / BCRH1R…）的手套**不需要**它，
+# SDK 按序列号自动认手；
+# 以下情况才要人声明一次：
+#   · 早期批次两只手套序列号相同，机器上没有任何可用来分左右的固有属性；
+#   · tracker 不插在手套单元的 HUB 上（例如走无线接收器）；
+#   · 一台机器上接了多组手套。
+# 与序列号同时存在时两者互为校验，结论不一致即拒绝连接——不会静默贴反。
+#
+# hub 填 scan() 报出来的 usb_topology_id，**不是** /dev/ttyACM* 编号（随插拔顺序变）、
+# 也**不是** usb_serial：
+#
+#     python3 -c "from revohuman import GloveManager; \
+#       [print(d.usb_topology_id, d.port, d.usb_serial, d.handedness, d.tracker_serial) for d in GloveManager().scan()]"
+#
+# 下面故意登记了两组，用来说明多组共存时的行为：bench 与 typec 都声明了 left/right，
+# 于是 connect(handedness="left") 会抛 ValueError 并列出组名，**不会替你挑一组**；
+# 要用哪一组必须显式写出来 —— connect(handedness="left", set_name="typec")。
+# 只登记一组时不存在这个歧义，可以省掉 set_name。
+
+sets:
+  bench:
+    note: 示例组一。hub 值是占位符，照抄跑不通，必须换成本机 scan() 的实测值。
+    left:
+      hub: "3-2.2"          # 手套单元的 USB 拓扑指纹（身份主键）
+      camera_port: 2        # 可选校验位：相机挂在本单元 HUB 的第几口，不参与匹配；相机在位而口位不符即拒绝连接
+    right:
+      hub: "3-2.1"
+      camera_port: 3
+
+  typec:
+    note: 示例组二。tracker 平时不用填 —— 有线 tracker 插在手套单元自己的 HUB 上时，
+      identity.resolve_tracker_serial 顺着 hub 自动带出；只有走无线 dongle 才需显式声明。
+    left:
+      hub: "1-2"
+      camera_port: 2
+      tracker: "LHR-AAAAAAAA"   # 占位符，换成实物序列号
+    right:
+      hub: "1-1"
+      camera_port: 2
+      tracker: "LHR-BBBBBBBB"

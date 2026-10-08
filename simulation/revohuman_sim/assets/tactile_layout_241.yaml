@@ -1,0 +1,167 @@
+# 241 点触觉（TYPE_B）→ 手部模型的笛卡尔布局契约（simulation/ 可视化用）
+#
+# 来源：网格按触觉点位图逐格录入（每指一张 8 列网格 + 点号），SDK 下标偏移与固件点序一致；点位图没有物理坐标。
+#       实物上每个指节的触觉阵列贴在套环（MCP/PIP，背侧开口的 C 形壳）/ 套帽（DIP，闭合圆顶）
+#       的掌侧曲面上，所以三维位置 = 对指节 mesh 拟合套环/套帽后按行距/列距沿曲面铺开
+#       （placement.method: cuff_surface），仅供可视化，不是标定值；行距/列距 2.5 mm 是估计值。
+#
+# 两类内容，改动自由度完全不同：
+#   fingers.*.rows / zones / sdk_offset —— **与固件点序对齐的契约**。
+#       rows[y] 列出第 y 行（Y0 = 指尖那一行）有点的列号 X（0..7），点号按行优先 1..N 递增，
+#       与点位图上印的编号一致；SDK 下标 = 手指起始下标（sdk_offset）+ 点号 − 1。
+#       五指起始下标 / 点数：拇指 0 / 57，食指 57 / 49，中指 106 / 49，无名指 155 / 49，小指 204 / 37。
+#       改了就和硬件对不上，不要"顺手优化"。
+#   placement —— 只是把网格贴到指节曲面上的摆法（可调的那一半）。
+version: 2
+vendor: TYPE_B
+wire_version: 1
+point_count: 241
+columns: 8            # 点位图横向 X0..X7
+
+fingers:
+  thumb:
+    sdk_offset: 0
+    count: 57
+    rows:                # Y0（指尖）→ Y10（指根）
+      - [3, 4]           # Y0:  1  2
+      - [3, 4]           # Y1:  3  4
+      - [0, 4, 7]        # Y2:  5  6  7
+      - [0, 4, 7]        # Y3:  8  9 10
+      - [0, 4]           # Y4: 11 12
+      - [0, 1, 4, 6, 7]  # Y5: 13 14 15 16 17
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y6: 18..25
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y7: 26..33   （指尖区到此 33 点）
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y8: 34..41   指根
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y9: 42..49
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y10: 50..57
+    zones:               # 行区间（含两端，rows 下标）→ 指节 URDF link（不含 {hand}_ 前缀）
+      - {name: tip,  rows: [0, 7],  link: thumb_DIP_Link, count: 33}   # 指尖 = 远节指骨
+      - {name: root, rows: [8, 10], link: thumb_PIP_Link, count: 24}   # 指根 = 近节指骨（thumb_PIP_Link z 长 45mm，DIP 关节在 39.4mm）
+
+  index:
+    sdk_offset: 57
+    count: 49
+    rows:
+      - [2, 3]           # Y0:  1  2
+      - [2, 3]           # Y1:  3  4
+      - [3]              # Y2:  5
+      - [0, 3, 6]        # Y3:  6  7  8
+      - [0, 3, 6]        # Y4:  9 10 11
+      - [3, 6]           # Y5: 12 13
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y6: 14..21   （指尖区到此 21 点）
+      - [0, 1, 2, 3, 4, 5]         # Y7: 22..27   指中
+      - [0, 1, 2, 3, 4, 5]         # Y8: 28..33
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y9: 34..41   指根
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y10: 42..49
+    zones:
+      - {name: tip,  rows: [0, 6],  link: index_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: index_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: index_MCP_Link, count: 16}
+
+  middle:              # 点位图与食指完全相同
+    sdk_offset: 106
+    count: 49
+    rows:
+      - [2, 3]
+      - [2, 3]
+      - [3]
+      - [0, 3, 6]
+      - [0, 3, 6]
+      - [3, 6]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+    zones:
+      - {name: tip,  rows: [0, 6],  link: middle_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: middle_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: middle_MCP_Link, count: 16}
+
+  ring:                # 点位图与食指完全相同
+    sdk_offset: 155
+    count: 49
+    rows:
+      - [2, 3]
+      - [2, 3]
+      - [3]
+      - [0, 3, 6]
+      - [0, 3, 6]
+      - [3, 6]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+    zones:
+      - {name: tip,  rows: [0, 6],  link: ring_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: ring_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: ring_MCP_Link, count: 16}
+
+  little:
+    sdk_offset: 204
+    count: 37
+    rows:
+      - [2, 3]           # Y0:  1  2
+      - [3]              # Y1:  3
+      - [0, 3, 5]        # Y2:  4  5  6
+      - [0, 3, 5]        # Y3:  7  8  9
+      - [3, 5]           # Y4: 10 11
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y5: 12..19   （指尖区到此 19 点）
+      - [0, 1, 2, 3, 4, 5]         # Y6: 20..25   指中
+      - [0, 1, 2, 3, 4, 5]         # Y7: 26..31   指根
+      - [0, 1, 2, 3, 4, 5]         # Y8: 32..37
+    zones:
+      - {name: tip,  rows: [0, 5],  link: little_DIP_Link, count: 19}
+      - {name: mid,  rows: [6, 6],  link: little_PIP_Link, count: 6}
+      - {name: root, rows: [7, 8],  link: little_MCP_Link, count: 12}
+
+# 网格贴到指节上的摆法（可调）。坐标全在指节 link 系里：+z 指向指尖、y 横跨手指、+x 掌面
+# （右手 URDF 里 tracker 装在 −x 那面 = 手背；四指 MPR 的 y：食指 +35mm … 小指 −33mm）。
+placement:             # 贴法（simulation/revohuman_sim/tactile_layout.py PlacedLayout；改这里不影响点序契约）
+  method: cuff_surface       # 对每个指节 mesh 拟合套环/套帽，逐行射线取曲面轮廓、按弧长铺列
+  columns_x0_side: ulnar     # 点位图 X0 在尺侧（radial 则镜像）
+  row_pitch_mm: 2.5          # 行距（沿指骨 / 沿子午线弧长）——估计值，未与实物核验
+  column_pitch_mm: 2.5       # 列距（沿曲面弧长）——估计值
+  lift_mm: 1.2               # 点抬离曲面的高度（画球用）
+  sphere_radius_mm: 1.2       # 选中点标记的参考半径
+  fit:                       # 套环/套帽拟合（mm / 度），见 fit_cuff
+    samples: 50000           # 面采样点数
+    seed: 0
+    slice_mm: 1.0            # 沿轴切片厚度
+    min_slice_samples: 80
+    inlier_mm: 0.8           # RANSAC 内点距离
+    radius_range_mm: [4.0, 16.0]
+    min_coverage_deg: 150    # 一片至少覆盖这么多角度才算圆截面（C 形外壁约 300°）
+    good_coverage_deg: 270   # 估轴/中心只用覆盖角 ≥ 此值的片
+    radius_step_mm: 2.5      # 相邻片半径跳变容差（内壁↔外壁 ≈ 壁厚）
+    center_step_mm: 3.5      # 相邻片圆心跳变容差
+    gap_mm: 3.0              # 链允许的断档
+    min_slices: 4
+    max_tilt_deg: {ring: 35, cap: 30}   # 重拟轴相对指骨方向的最大倾角（MCP 套环实测 14–24°）
+    outer_percentile: 95     # 外壁半径取壁厚带内离轴距离的分位数
+    extent_step_mm: 0.5      # 壁面沿轴真实范围：RANSAC 链只是起点，再按壁带样本密度向两端扩
+    extent_reach_mm: 4.0     #   最多向外扩这么多
+    extent_frac: 0.5         #   密度掉到链内中位数的这个比例以下就停（铰链耳/底座到不了一半）
+  ring:
+    max_wrap_deg: 100        # 射线扫描的方位范围 ±
+    hit_margin_mm: 3.0       # 交点距离上限 = 外壁半径 + 此值（挡住铰链耳）
+  cap:
+    apex_rho_mm: 2.5         # 指尖第 0 行放在子午线上局部半径缩到此值的纬度（≈列距：顶行 3 点横跨指尖；再小列就围着轴心转）
+    max_wrap_deg: 100
+    hit_margin_mm: 3.0
+  overrides:                 # 逐 link 覆盖，例如 {index_PIP_Link: {phi_offset_deg: 5, row_offset_mm: -1}}
+                             #   可覆盖：row_pitch_mm / column_pitch_mm / lift_mm / phi_offset_deg（正 = 往尺侧转）
+                             #   / row_offset_mm（正 = 往指尖挪）/ apex_rho_mm
+    # 拇指指尖阵列整体往指根挪 4.5mm。不挪时 Y0..Y7 全落在套帽穹顶上，指节根侧那段圆柱
+    #   面 10.65mm（子午线 9.5mm、占 29.2mm 子午线的 33%）一个点都没有，指节根部显示不出接触。
+    #   其余四指同款空白只有 4.6-5.3mm（21-23%）——拇指是唯一的异类：它的子午线 29.2mm 比其余指的
+    #   19.7-22.6mm 长得多，行数却只多一行（8 行 × 2.5mm = 17.5mm 跨度），铺不满。
+    #   -4.5 让根侧空白降到 5.0mm，与其余四指的绝对值齐平（指尖侧留 6.7mm，顶点那圈故意空着——
+    #   Y0 只有 2 列、本来也盖不住穹顶）。完全居中是 -3.65（5.85/5.85）。
+    thumb_DIP_Link: {row_offset_mm: -4.5}
+
+# 热力图色标量程（可调）：scale=0 表示自动（峰值保持、慢衰减）
+value:
+  auto_scale_floor: 200.0  # mN；自动量程的下限，免得零点附近几 mN 的小读数把整只手染红
+  auto_scale_decay: 0.995  # 每渲染帧衰减系数
