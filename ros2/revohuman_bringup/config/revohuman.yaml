@@ -1,0 +1,139 @@
+# revohuman_bringup 的参数底稿——`revohuman.launch.py` 默认加载这一份。
+#
+# `/**` 通配对所有节点生效；**节点没声明的参数会被 rclpy 静默忽略**，
+# 所以单手块和双手块可以写在一起（`pair_mode` 到了 glove_node 就没人要，反之亦然）。
+#
+# ⚠️ 类型必须与节点 `declare_parameter` 的默认值同型：`rate_hz` 写成 `200` 而不是 `200.0`
+# 会在声明那一刻抛 InvalidParameterTypeException，现象是节点直接起不来。
+#
+# 这里的值就是节点默认值，照抄一份是为了让「能调什么」有个可见的清单；
+# 改这个文件 = 改本机默认，临时改一次用命令行：`... rate_hz:=100.0`（命令行盖过本文件）。
+/**:
+  ros__parameters:
+
+    # ── 手套本体 ────────────────────────────────────────────────
+    # 手套组注册表路径；留空 = SDK 自带的查找顺序
+    registry_path: ""
+    # 手套组名（注册表里的 sets.<组>）；留空 = 自动选在位的那组
+    set_name: ""
+    # 发布速率（Hz）。SDK 采集速率与它无关，这里只决定往 ROS 上发多快
+    rate_hz: 200.0
+    # auto = 型号带触觉就建 ~/tactile；off = 永不建。没有 on 档
+    publish_tactile: "auto"
+    # true = 没有触觉就拒绝启动。默认最小采集单元是「编码器 + tracker」，触觉可选
+    require_tactile: false
+    # 写设备的标定服务开关。false（默认）时 ~/calibrate 与 ~/clear_calibration
+    # **根本不注册**——不是调了被拒，而是服务不存在，rosbridge 也没得转发给浏览器。
+    # 标定会把当前姿态写成零位，写错只能重标，而误触发的代价（整段采集关节角全偏）
+    # 在数据里看不出来。只读的 ~/selftest / ~/get_sn 不受此开关影响，始终注册。
+    allow_calibration: false
+
+    # ── 产品型号 ────────────────────────────────────────────────
+    # auto = 按 MCU 序列号规则 + 在位硬件识别 P1 / PTV1（识别只读，不写设备）
+    # P1 / PTV1 = 声明型号，与识别证据相反则拒绝启动
+    # off = 不识别，传感器组合完全按下面各自的参数走
+    product: "auto"
+    # 型号规则文件；留空 = ~/.config/revohuman/products.yaml（$REVOHUMAN_PRODUCTS 可覆盖）
+    product_rules_path: ""
+    # true = 型号应有的传感器缺了就拒绝启动；false = 只告警
+    product_strict: true
+
+    # ── 只有 mode:=pair 用得上 ──────────────────────────────────
+    # strict = 只发硬件同步下同一采样刻配成的对；best_effort = 允许按精度预算配
+    pair_mode: "strict"
+    # 手套左右配对的精度预算（ms）。负数 = 用 pair_mode 的默认（strict → 0.0）
+    pair_accuracy_ms: -1.0
+    # tracker 左右配对的精度预算（ms）
+    tracker_pair_accuracy_ms: 1.0
+
+    # ── tracker ────────────────────────────────────────────────
+    # required = tracker 起不来整个节点启动失败（默认最小采集单元含 tracker）
+    # auto     = 起不来只告警，手套照发
+    # off      = 纯手套，不碰 libsurvive
+    tracker_mode: "required"
+    # 序列号留空 = 按「参数 > 该手手套 HUB 上实插的 tracker > 注册表 sets.<组>.<hand>.tracker」解析，
+    # 三处都没有就拒绝启动——不按枚举顺序猜
+    tracker_serial: ""          # mode:=left|right 用
+    tracker_left_serial: ""     # mode:=pair 用
+    tracker_right_serial: ""    # mode:=pair 用
+    # 在册基站的 8 位 id；[""] = 按基站白名单解析（白名单与标定门限写在同一份配置里，
+    # 用的是哪份文件、缺什么：`revohuman-lighthouses show`；覆盖度门限以下面 ROS 参数为准）
+    tracker_lighthouses: [""]
+    # 运行期基站被搬动时怎么办：
+    # error = 立刻停采并让录制中止（默认；搬动后的位姿与之前不在同一个坐标系里，事后分不出来）
+    # flag  = 只记一次纪元变更，继续采
+    # off   = 完全不检测
+    tracker_world_gate_mode: "error"
+    # 采样时刻的绝对精度预算（ms）。负数 = 不要求；标定过 φ_pack 之后填 0.2 可在启动时挡下未标定的机器
+    tracker_stamp_accuracy_ms: -1.0
+    # φ_pack 标定值，逐序列号 ["LHR-XXXXXXXX=0.31", ...]；空 = 未标定。
+    # tracker_stamp_accuracy_ms 要能被满足就必须先填这个
+    tracker_phi_pack_ms: [""]
+    # tracker 活性门窗口（s）。负数 = SDK 自动档；0 = 显式关
+    tracker_liveness_gate_s: -1.0
+    # tracker 位姿的 frame_id
+    tracker_frame_id: "world"
+    # 额外 libsurvive 参数；[""] = SDK 默认
+    tracker_survive_args: [""]
+
+    # ── 基站几何标定与零位 ──────────────────────────────────────
+    # 状态目录（在册基站、标定记录、零位、信道预检、当前模式）。留空 =
+    # $REVOHUMAN_TRACKER_STATE_DIR > $XDG_STATE_HOME/revohuman/tracker > ~/.local/state/revohuman/tracker
+    tracker_state_dir: ""
+    # libsurvive 配置文件；留空 = ~/.config/libsurvive/config.json
+    tracker_config_path: ""
+    # 运行档的基站几何门（外参被清 / 几何缺失 / 基站间距漂移）：
+    # error = 拒绝零位标定（默认）；flag = 只在 tracker_status 里标出；off = 不检查
+    tracker_geometry_gate_mode: "error"
+    # true = 只接受在册基站的光信号（在册为空或尚无几何时自动放开）
+    tracker_fence: true
+    # true = 进入几何标定前要求 5 分钟内做过基站信道预检（`python3 -m revohuman tracker preflight`）
+    tracker_require_preflight: true
+    # 几何标定的超时（s）；超时视为失败，配置回滚到标定前
+    tracker_calibration_timeout_s: 300.0
+
+    # ── 腕部相机 ────────────────────────────────────────────────
+    # ""       = 按产品型号：PTV1 → required，P1 / product=off → off（默认）
+    # off      = 不建话题、不碰 sysfs、不 import revohuman.camera
+    # auto     = 起得来就发 <ns>/wrist_camera/image/compressed（pair：wrist_camera_left|right/…），
+    #            起不来只告警、手套照发
+    # required = 相机起不来整个节点启动失败
+    camera_mode: ""
+    # 设备节点留空 = 在该手手套单元的 HUB 下自动发现；显式给 /dev/videoN 就不查 sysfs
+    camera_device: ""            # mode:=left|right 用
+    camera_meta_device: ""       # 同上：UVC 元数据节点（一般是 /dev/videoN+1）；留空 = 自动
+    camera_usb_hub: ""           # 同上：限定到某个 HUB（如 "3-1"）；留空 = 该手手套单元的 HUB
+    camera_left_device: ""       # mode:=pair 用，含义同上三项
+    camera_left_meta_device: ""
+    camera_left_usb_hub: ""
+    camera_right_device: ""
+    camera_right_meta_device: ""
+    camera_right_usb_hub: ""
+    # 成像：640×480@30 MJPG。YUYV 帧率相同、码率高约 10 倍
+    camera_width: 640
+    camera_height: 480
+    camera_fps: 30
+    camera_fourcc: "MJPG"
+    # 曝光，100µs 单位（166 = 16.6ms = 设备出厂默认）；<= 0 = 自动曝光。换场地按实测重标
+    camera_exposure: 166
+    # v4l2 mmap 缓冲数；零拷贝可借出的额度 = buffers - loan_reserve（SDK 默认留 2 块给驱动）
+    camera_buffers: 4
+    # 用 UVC 元数据节点的 PTS 打戳（相对误差 µs 级）；false = 退回缓冲戳（±2ms 量化）
+    camera_use_metadata: true
+    # true = subscribe(loaned=True)：帧在驱动缓冲上读、进 ROS 消息只拷一次；false = SDK 先拷一份再发
+    camera_zero_copy: true
+    # 图像 frame_id；留空 = revohuman_<hand>_wrist_camera（pair 下显式值会追加 _left / _right）
+    camera_frame_id: ""
+    # ── 相机标定量回填（都留空 = 未标定，走模型值）────────────────
+    # PTS 相对采样时刻的常数偏移，毫秒。留空 = 走「读出中点」模型（误差 ±(曝光/2 + 约 1ms)）。
+    # 空串才表示未标定：0 与负值都是合法标定值。
+    camera_pts_offset_ms: ""
+    # 卷帘读出时间，毫秒（首行→末行）。留空 = 取标称帧周期（30fps 即 33.3ms）
+    camera_readout_ms: ""
+    # 额外控制项，叠在 SDK 的 DEFAULT_CONTROLS 上（那 12 项默认就托管）。
+    # 写法 ["name=value", ...]，名字必须是已知控制项，写错**启动即失败**而不是静默忽略。
+    # 例：["white_balance_automatic=0", "white_balance_temperature=4600"]（需先逐台标色温）
+    camera_controls: [""]
+    # true = 任一控制项没设上就启动失败。默认 false：成像参数不对也还能出流，
+    # 录制现场宁可带告警继续录；门禁/标定场景该开成 true
+    camera_strict_controls: false
