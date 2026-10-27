@@ -1,0 +1,6 @@
+# 手套可视化（simulation/）的全部依赖。可视化只订阅 SDK 的本机广播，不需要装 SDK 本体。
+# mujoco 限定在发布前测试过的版本范围内，与 install_venv.sh、pyproject.toml（viewer）一致
+mujoco>=3.1,<3.13
+glfw>=2.6
+numpy>=1.26
+PyYAML>=5.4
