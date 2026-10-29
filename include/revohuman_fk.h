@@ -62,6 +62,12 @@ RH_API RhStatus rh_pose_compose(const RhLinkPose *base, const RhLinkPose *local,
 typedef int32_t RhHandModel;
 enum { RH_HAND_MODEL_DV1 = 1, RH_HAND_MODEL_P = 2 };
 
+/* 产品型号（RhProductIdentity.variant_code / RhHandReport.variant，"P1" / "PTV1"）→ 手部几何型号（RhHandModel）。
+ * 固定映射，不读硬件、不依赖 identify：P1 → RH_HAND_MODEL_P，PTV1 → RH_HAND_MODEL_DV1。
+ * variant_code 为 NULL、out 为 NULL、或认不出（含 "auto"、空串、大小写/空白差异之外的任何其它串）
+ * → RH_ERR_INVALID_ARG（码 1000），*out 不写。不存在「默认型号」回退：认不出就是认不出，不会落到 DV1。 */
+RH_API RhStatus rh_variant_hand_model(const char *variant_code, RhHandModel *out);
+
 /* 型号元数据（出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandModelInfo)）。 */
 typedef struct RhHandModelInfo {
     uint32_t    struct_size;

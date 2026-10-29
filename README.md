@@ -6,7 +6,7 @@ RevoHuman 数据手套的 C 语言库：连接手套，读取每手 21 个关节
 Tracker 位姿、腕部相机、MCAP 录制和 ROS 2 节点请用 Python SDK，见本仓库 [main 分支](https://github.com/BrainCoTech/brainco-revohuman-sdk/tree/main)。
 两者的错误码逐值相同，C 库的本机广播可以直接接 Python SDK 的查看器。
 
-本分支只放公开头文件、最小示例和许可证。库以二进制包发布，不含源码。
+这里只放公开头文件、最小示例和许可证。库以二进制包发布，不含源码。
 
 ```
 LICENSE                     Apache-2.0 许可证全文
@@ -30,17 +30,17 @@ example/                    不接手套就能跑的最小示例
 
 ## 下载与校验
 
-发布文件在 [GitHub Release c-sdk-v0.1.0](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.0) 下载：
+发布文件在 [GitHub Release c-sdk-v0.1.1](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.1) 下载：
 
 | 文件 | 内容 |
 |---|---|
-| `revohuman-c-sdk-0.1.0-linux-x86_64.tar.gz` | x86_64 二进制包 |
-| `revohuman-c-sdk-0.1.0-linux-aarch64.tar.gz` | aarch64 二进制包 |
+| `revohuman-c-sdk-0.1.1-linux-x86_64.tar.gz` | x86_64 二进制包 |
+| `revohuman-c-sdk-0.1.1-linux-aarch64.tar.gz` | aarch64 二进制包 |
 | `SHA256SUMS` | 校验和 |
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-tar -xzf revohuman-c-sdk-0.1.0-linux-$(uname -m).tar.gz
+tar -xzf revohuman-c-sdk-0.1.1-linux-$(uname -m).tar.gz
 ```
 
 解压出的目录下文中记作 `<SDK>`，可以放在任意位置。包内的 `README.md` 列出了全部文件，`SHA256SUMS` 可以逐文件校验，
