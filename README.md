@@ -30,17 +30,17 @@ example/                    不接手套就能跑的最小示例
 
 ## 下载与校验
 
-发布文件在 [GitHub Release c-sdk-v0.1.1](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.1) 下载：
+发布文件在 [GitHub Release c-sdk-v0.1.2](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.2) 下载：
 
 | 文件 | 内容 |
 |---|---|
-| `revohuman-c-sdk-0.1.1-linux-x86_64.tar.gz` | x86_64 二进制包 |
-| `revohuman-c-sdk-0.1.1-linux-aarch64.tar.gz` | aarch64 二进制包 |
+| `revohuman-c-sdk-0.1.2-linux-x86_64.tar.gz` | x86_64 二进制包 |
+| `revohuman-c-sdk-0.1.2-linux-aarch64.tar.gz` | aarch64 二进制包 |
 | `SHA256SUMS` | 校验和 |
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-tar -xzf revohuman-c-sdk-0.1.1-linux-$(uname -m).tar.gz
+tar -xzf revohuman-c-sdk-0.1.2-linux-$(uname -m).tar.gz
 ```
 
 解压出的目录下文中记作 `<SDK>`，可以放在任意位置。包内的 `README.md` 列出了全部文件，`SHA256SUMS` 可以逐文件校验，

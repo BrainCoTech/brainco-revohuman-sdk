@@ -1,7 +1,7 @@
 /*
  * RevoHuman SDK — C API
  *
- * v0.1.1。功能面对齐 Python 包 `revohuman` 0.1.1，
+ * v0.1.2。功能面对齐 Python 包 `revohuman` 0.1.1，
  * 本机广播与 Python 侧 `revohuman.live` schema 1 兼容，现有 `simulation/` 查看器不改一行即可接。
  * C 有意偏离 Python 的地方在对应字段旁注明（「C 偏离」「C 扩展」）。
  *
@@ -85,7 +85,7 @@ extern "C" {
 
 #define RH_API_VERSION_MAJOR 0
 #define RH_API_VERSION_MINOR 1
-#define RH_API_VERSION_PATCH 1
+#define RH_API_VERSION_PATCH 2
 
 /* ───────────────────────────── 常量 ───────────────────────────── */
 
@@ -272,7 +272,7 @@ typedef struct RhInitOptions {
 RH_API void        rh_init_options_init(RhInitOptions *opts);
 RH_API RhStatus    rh_init(const RhInitOptions *opts);   /* 幂等 */
 RH_API void        rh_shutdown(void);                    /* 未释放的句柄会被强制关闭并告警 */
-RH_API const char *rh_version(void);                     /* 静态串，如 "0.1.1" */
+RH_API const char *rh_version(void);                     /* 静态串，如 "0.1.2" */
 
 /* 上一个错误的 E 码（与 Python error_code() 同规则）。 */
 RH_API RhErrorCode rh_last_error_code(void);
