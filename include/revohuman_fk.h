@@ -1,5 +1,5 @@
 /*
- * RevoHuman SDK — 手部正运动学与 tracker→掌根名义外参（C API）
+ * RevoHuman SDK — 手部正运动学与 tracker→palm_link 名义外参（C API）
  *
  * 与 Python 包 `revohuman` 的 hand_fk 对拍：模型常量逐位相同，位姿有限值绝对差 ≤ 1e-12。
  *
@@ -11,11 +11,15 @@
  * 3. 手别只认 RH_HAND_LEFT / RH_HAND_RIGHT；RH_HAND_UNKNOWN 与越界值 → RH_ERR_INVALID_ARG（码 1000）。
  * 4. 非有限关节角按 NaN 算：第 i 个 link 的姿态与全部后代为 NaN，第 i 个 link 的原点照常有值。
  *    FK 不读 joints_valid_mask；要让无效关节传播 NaN，调用方先把对应 q 置 NaN。
- * 5. rh_hand_fk / rh_hand_model_fk 只覆盖关节表里 21 个子 link；带指尖与掌根的 27 点见 rh_hand_points
+ * 5. rh_hand_fk / rh_hand_model_fk 只覆盖关节表里 21 个子 link；带指尖与 palm_link 坐标原点的 27 点见 rh_hand_points
  *    （只有指定型号入口），指尖长度见 rh_hand_model_info。OpenXR 关节布局不在 SDK 里，归调用方。
  * 6. 型号：本期带 DV1 与 P 两套模型常量。不带型号参数的入口（rh_hand_model_sha256 / rh_hand_link_name /
  *    rh_hand_tracker_mount / rh_hand_fk / rh_palm_from_tracker）本期固定按 DV1 算；要用 P 只能走带
  *    RhHandModel 参数的 rh_hand_model_* 入口。不带型号参数的入口下一期改指 P，新代码请直接用显式入口。
+ * 7. palm_link 坐标原点是 URDF 的 CAD 装配基准点：在手背那一层、手背板近端之外，不在任何关节或网格上，
+ *    也不是解剖学上的掌根或腕关节中心。{hand}_tracker_link 的原点 = tracker 原始位姿（TrackerPose）的原点，
+ *    在 tracker 底面 1/4" 螺孔轴上。两个型号的 palm_link 坐标原点相对 tracker 在同一处（P 的已在模型文件里
+ *    对齐到 DV1），所以 rh_hand_model_palm_from_tracker 与 rh_hand_points 的点 26 两个型号逐位相同。
  */
 #ifndef REVOHUMAN_FK_H
 #define REVOHUMAN_FK_H
@@ -39,16 +43,16 @@ RH_API const char *rh_hand_model_sha256(void);
  * 成功返回所需长度（不含 NUL），buf_len > 0 时总写入以 NUL 结尾的（可能截断的）内容；失败返回负的 RhStatus。 */
 RH_API int32_t  rh_hand_link_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
 
-/* tracker link 在掌根系中的位姿（常量，姿态为单位阵）。 */
+/* tracker link 在 palm_link 系中的位姿（常量，姿态为单位阵）。 */
 RH_API RhStatus rh_hand_tracker_mount(RhHand hand, RhLinkPose *out);
 
 /* 21 个关节角（rad，URDF 关节正方向，顺序 = 关节表下标）→ 21 个子 link 的位姿。
- * base 为 NULL → 掌根系；否则逐条 base ∘ 结果（base 不做任何检查，非有限值按 IEEE 传播）。
+ * base 为 NULL → palm_link 系；否则逐条 base ∘ 结果（base 不做任何检查，非有限值按 IEEE 传播）。
  * base 可以指向 out 数组内部：实现先拷走 *base 再写 out。 */
 RH_API RhStatus rh_hand_fk(RhHand hand, const double q_rad[RH_JOINT_COUNT],
                            const RhLinkPose *base, RhLinkPose out[RH_JOINT_COUNT]);
 
-/* tracker 原始位姿 → 掌根在同一参考系中的名义位姿（按模型装配关系，没有逐只手套标定）。
+/* tracker 原始位姿 → palm_link 在同一参考系中的名义位姿（按模型装配关系，没有逐只手套标定）。
  * p = RhTrackerPose.p，q_wxyz = RhTrackerPose.q（不必归一）。
  * √(w²+x²+y²+z²) 非有限或 < 1e-12 → 结果 12 个数全为 NaN；p 不检查，非有限分量按 IEEE 传播。 */
 RH_API RhStatus rh_palm_from_tracker(RhHand hand, const double p[3], const double q_wxyz[4],
@@ -89,11 +93,11 @@ RH_API RhStatus rh_hand_model_palm_from_tracker(RhHandModel model, RhHand hand, 
                                                 const double q_wxyz[4], RhLinkPose *out);
 
 /* ── 手内点集 ───────────────────────────────────────────────────────────────
- * 27 个点在 {hand}_tracker_link 系中的位姿。tracker_link 是模型里挂在掌根下的固定坐标系（掌根系里是 (t, I)，
+ * 27 个点在 {hand}_tracker_link 系中的位姿。tracker_link 是模型里挂在 palm_link 下的固定坐标系（palm_link 系里是 (t, I)，
  * t = rh_hand_model_palm_from_tracker 用的同一个挂载平移），算这些点用不到任何 tracker 数据。点序：
  *   0–20   关节 i 的子 link，下标与 rh_hand_model_fk 的输出相同
  *   21–25  指尖，食、中、无名、小、拇（{hand}_{finger}_TIP，挂在该指 DIP link 上）
- *   26     掌根原点（{hand}_palm_link），恒有效
+ *   26     palm_link 坐标原点（{hand}_palm_link），恒有效
  * 有效位按拓扑推、不看结果的浮点值：关节 i 有效 ⇔ joints_valid_mask 第 i 位为 1 且 q_i 有限（只读低 21 位）。
  * 点 i 的位置有效 ⇔ i 的全部祖先关节有效（不含 i 自己）；朝向有效 ⇔ i 与全部祖先都有效；
  * 指尖的位置与朝向都 ⇔ 它那根 DIP 的朝向有效。无效的量整个写 NaN（位置 3 个、朝向 9 个），
@@ -134,6 +138,42 @@ RH_API RhStatus rh_hand_points_from_frame(RhHandModel model, const char *product
 /* 第 index 个点的名字（如 "left_index_TIP"；两个型号相同，故不带型号）。返回值约定同 rh_hand_link_name；
  * 手别不是 LEFT / RIGHT、index ≥ RH_HAND_POINT_COUNT → 负的 RhStatus。 */
 RH_API int32_t  rh_hand_point_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
+
+/* ── 触觉点布局 ─────────────────────────────────────────────────────────────
+ * 触觉帧 RhTactile.values 的第 i 个值来自哪个点：贴在哪个 link 上，在该 link 系里的位置与外法向。
+ * 设 L = rh_hand_model_fk 输出的第 taxels[i].link 个位姿，则点位 = L.p + L.r·p，外法向 = L.r·n
+ * （base 为 NULL 时在 palm_link 系，给 base 时在 base 系）。数据随库编译，不读文件。
+ * 只有 DV1（PTV1 手套，TYPE_B 241 点）有布局；P 型号不带触觉。
+ * 不是逐台标定值：阵列按 2.5 mm 行列距铺到套环/套帽掌侧的外表面再外抬 1.2 mm；外法向是套环/套帽网格上
+ * 离该点最近的点指向该点的单位方向（最近点在某个面内部时就是该面法向）。 */
+#define RH_TAXEL_LAYOUT_VERSION 1   /* 点序、位置来源、法向取法任一项变就加一 */
+
+/* 数组元素的值类型，冻结为 POD、永不扩展，不带 struct_size。 */
+typedef struct RhTaxel {
+    double   p[3];       /* link 系位置，米 */
+    double   n[3];       /* link 系外法向，单位向量 */
+    uint32_t link;       /* = rh_hand_model_fk 输出下标（0–20） */
+    uint32_t reserved;   /* 恒 0 */
+} RhTaxel;
+
+/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhTaxelLayout)。约 19 KB，别在小栈线程上放局部变量。 */
+typedef struct RhTaxelLayout {
+    uint32_t    struct_size;
+    uint32_t    layout_version;                  /* = RH_TAXEL_LAYOUT_VERSION */
+    RhHandModel model;                           /* 调用方给的型号 */
+    RhHand      hand;
+    uint32_t    count;                           /* = 调用方给的 point_count */
+    char        source[48];                      /* 来源说明，如 "cuff-surface-v2@4e7da46"，NUL 结尾 */
+    RhTaxel     taxels[RH_TACTILE_MAX_POINTS];   /* 下标 = RhTactile.values 下标；count 之后全 0 */
+} RhTaxelLayout;
+
+/* point_count 给触觉帧的 RhTactile.point_count。
+ * 型号、手别不认识，out 为 NULL 或 struct_size 太小，point_count 为 0 或 > RH_TACTILE_MAX_POINTS
+ *   → RH_ERR_INVALID_ARG；
+ * 型号不带触觉（P），或该型号没有这个点数的布局（DV1 只有 241）→ RH_ERR_UNSUPPORTED（错误码 1800）。
+ * 失败不写输出。纯函数，可并发调用。 */
+RH_API RhStatus rh_hand_model_taxel_layout(RhHandModel model, RhHand hand, uint32_t point_count,
+                                           RhTaxelLayout *out);
 
 #ifdef __cplusplus
 }

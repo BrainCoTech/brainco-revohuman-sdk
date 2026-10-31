@@ -1,7 +1,7 @@
 /*
  * RevoHuman SDK — C API
  *
- * v0.1.2。功能面对齐 Python 包 `revohuman` 0.1.1，
+ * v0.1.3。功能面对齐 Python 包 `revohuman` 0.1.1，
  * 本机广播与 Python 侧 `revohuman.live` schema 1 兼容，现有 `simulation/` 查看器不改一行即可接。
  * C 有意偏离 Python 的地方在对应字段旁注明（「C 偏离」「C 扩展」）。
  *
@@ -85,7 +85,7 @@ extern "C" {
 
 #define RH_API_VERSION_MAJOR 0
 #define RH_API_VERSION_MINOR 1
-#define RH_API_VERSION_PATCH 2
+#define RH_API_VERSION_PATCH 3
 
 /* ───────────────────────────── 常量 ───────────────────────────── */
 
@@ -272,7 +272,7 @@ typedef struct RhInitOptions {
 RH_API void        rh_init_options_init(RhInitOptions *opts);
 RH_API RhStatus    rh_init(const RhInitOptions *opts);   /* 幂等 */
 RH_API void        rh_shutdown(void);                    /* 未释放的句柄会被强制关闭并告警 */
-RH_API const char *rh_version(void);                     /* 静态串，如 "0.1.2" */
+RH_API const char *rh_version(void);                     /* 静态串，如 "0.1.3" */
 
 /* 上一个错误的 E 码（与 Python error_code() 同规则）。 */
 RH_API RhErrorCode rh_last_error_code(void);
@@ -288,7 +288,10 @@ RH_API const char *rh_error_class_name(RhErrorCode code);
 
 typedef void (*RhLogCallback)(RhLogLevel level, const char *message, void *user_data);
 RH_API void rh_set_log_level(RhLogLevel level);
-/* 默认写 stderr；设回调后只走回调。回调可能来自任意内部线程。 */
+/* 默认写 stderr；设回调后只走回调，传 NULL 恢复写 stderr。回调可能来自任意内部线程。
+ * 回调在库内一把非递归锁里调用，各线程的日志依次进回调：回调要快，且不得在回调里调用本函数
+ * 或其他会写日志的 rh_* 函数（会死锁）。本函数返回时旧回调已不在执行中，此后也不会再被调用，
+ * 它的 user_data 即可释放。 */
 RH_API void rh_set_log_callback(RhLogCallback cb, void *user_data);
 
 /* ───────────────────────────── 时间 ───────────────────────────── */
@@ -416,7 +419,7 @@ typedef struct RhDiscoveredGlove {
     char     product_type[RH_ID_MAX];    /* UNKNOWN / ENCODER_ONLY / ENCODER_TACTILE */
     uint16_t encoder_count;
     uint16_t tactile_point_count;
-    char     tactile_kind[16];           /* "TYPE_A" / "TYPE_B"；厂商未知或读不到为空 */
+    char     tactile_kind[16];           /* "TYPE_A" / "TYPE_B"；类型未识别或读不到为空 */
 } RhDiscoveredGlove;
 
 typedef struct RhScanOptions {
