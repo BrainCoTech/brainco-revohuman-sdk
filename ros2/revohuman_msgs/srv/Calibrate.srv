@@ -1,0 +1,5 @@
+# 编码器标定（人工触发，维护窗内执行，流会短暂停下）。target：编码器索引，255 = 全部。
+uint8 target
+---
+bool success
+string message

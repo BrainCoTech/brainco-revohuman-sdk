@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>revohuman_ros</name>
+  <version>0.1.2</version>
+  <description>RevoHuman 手套 SDK 的 ROS2 薄壳：glove_node（单手）/ bimanual_node（双手合并）。只暴露数据话题与四个人工触发的服务；tracker 位姿嵌在同一节点里发（tracker_mode 参数开）；腕部相机作为可选硬件同样嵌在节点里（camera_mode 参数开，默认 off）。</description>
+  <maintainer email="devnull@example.com">RevoHuman</maintainer>
+  <license>Proprietary</license>
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>revohuman_msgs</depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
