@@ -167,6 +167,49 @@ typedef struct RhHandKnuckles {
 RH_API RhStatus rh_hand_knuckles(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
                                  uint32_t joints_valid_mask, RhHandKnuckles *out);
 
+/* ── 手部关键点 ─────────────────────────────────────────────────────────────
+ * 人手 22 个关键点的名义位置，在 {hand}_tracker_link 系中：手指里的关节中心与指尖，外加腕点与掌心。
+ * rh_hand_points 的点是外骨架 link 的原点，在手背那一层；关键点按名义常量挪进手指，同 rh_hand_knuckles，
+ * 不是逐只手套的标定值。点只给位置：手指朝向随消费方的骨架约定而定，由调用方取 rh_hand_points 的 link 朝向
+ * 自己定；另给一个掌心系 palm_r（掌面朝向是手套的名义事实）：Z 是掌心法向、指向掌面外侧，X 指向中指，Y = Z × X。
+ * 常量按型号建表；没有表的型号 → RH_ERR_UNSUPPORTED（码 1202）。
+ * 轴向约定（所有型号都满足，新型号接入时由 SDK 统一）：palm_link 与各手指 link 的 −X 指向手背。
+ * 点序（常见的 21 点手部关键点，掌心放最后）：0 腕点；1–4 拇指 CMC / MCP / IP / TIP；
+ *   5–8 食指 MCP / PIP / DIP / TIP；9–12 中指；13–16 无名指；17–20 小指；21 掌心。
+ * 设 P = rh_hand_points 同一组输入下的点集，p_i = P.points[i].p、R_i = P.points[i].r，x̂ = (1, 0, 0)，
+ * 名义方向右手 Y 取反：
+ *   腕点 = p_26 + (R_26·x̂)·w；掌心 = (R_26·x̂)·a（tracker_link 原点沿 palm_link +X）；
+ *   四指 MCP = rh_hand_knuckles 同一组输入下的点位（逐位相同）；
+ *   四指 k 的 PIP / DIP / TIP = p_{4k+1} / p_{4k} / p_{21+k} + (R_{4k+3}·e_k)·s_k（e_k 在 MPR link 系）；
+ *   拇指 CMC = p_20 + (R_19·x̂)·c；拇指 MCP / IP / TIP = p_17 / p_16 / p_25 + (R_19·e_4)·s_4（e_4 在 CMR link 系）。
+ * 腕点在中、无名指 MCP 的深度上，是名义参考点，不是解剖学的腕关节中心。
+ * 有效位：所用的 P 的位置与朝向都有效才有效（腕点、掌心、palm_r 恒有效）；无效的点三个分量都写 NaN，
+ * 所以「掩码位为 1 ⇔ 该点全有限」恒成立。 */
+#define RH_HAND_KEYPOINT_COUNT    22
+#define RH_HAND_KEYPOINTS_VERSION 1   /* 点序、位置规则、常量、有效性规则任一项变就加一 */
+
+/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandKeypoints)。 */
+typedef struct RhHandKeypoints {
+    uint32_t     struct_size;
+    uint32_t     keypoints_version;       /* = RH_HAND_KEYPOINTS_VERSION */
+    RhHandModel  model;                   /* 调用方给的型号 */
+    RhHand       hand;
+    uint32_t     valid_mask;              /* bit k：points[k] 有效；bit 22–31 恒 0 */
+    uint32_t     reserved;                /* 恒 0 */
+    double       points[RH_HAND_KEYPOINT_COUNT][3];
+    double       palm_r[9];               /* 掌心系在 tracker_link 中的朝向，行主序，列为 X / Y / Z 轴 */
+} RhHandKeypoints;
+
+/* 入参与 rh_hand_points 相同，错误次序也相同：型号、手别不认识或指针为 NULL、out->struct_size 太小
+ * → RH_ERR_INVALID_ARG；型号没有关键点表 → RH_ERR_UNSUPPORTED；都不写输出。纯函数、无跨调用状态；
+ * q_rad 可以指向 out 内部（实现先拷走 q 再写 out）。 */
+RH_API RhStatus rh_hand_keypoints(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
+                                  uint32_t joints_valid_mask, RhHandKeypoints *out);
+
+/* 第 index 个关键点的名字（如 "left_index_pip"，两个型号相同）。返回值约定同 rh_hand_link_name；
+ * 手别不是 LEFT / RIGHT、index ≥ RH_HAND_KEYPOINT_COUNT → 负的 RhStatus。 */
+RH_API int32_t  rh_hand_keypoint_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
+
 /* ── 触觉点布局 ─────────────────────────────────────────────────────────────
  * 触觉帧 RhTactile.values 的第 i 个值来自哪个点：贴在哪个 link 上，在该 link 系里的位置与外法向。
  * 设 L = rh_hand_model_fk 输出的第 taxels[i].link 个位姿，则点位 = L.p + L.r·p，外法向 = L.r·n

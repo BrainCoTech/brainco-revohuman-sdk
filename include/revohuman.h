@@ -42,8 +42,13 @@
  *    （容器把宿主 /dev 挂到别处时用），每次扫描 / 定位时现读，不要在别的线程同时改它。
  *    显式给的 port 是 /dev/... 而它本身不存在、该目录下同名节点存在时，换成后者再连。
  *
- * 手别只认 MCU 序列号：C SDK 不读也不写手别注册表 glove_sets.yaml（Python SDK 的 register / set_name
- * 在 C 里没有对应物），序列号撞号的旧一代手套只能用 port / unit_id 定位。
+ * 手别依据：MCU 固件登记的手别（固件 0.20.3 起；新一批手套的 USB 序列号不再带 L / R）> MCU 序列号。
+ * 固件登记的手别只能经串口读：连接前定位（含断线重连）、rh_scan 的 probe、autokit 的在位扫描各给还没读过的在位 MCU
+ * 短开一次只读，结果按本次开机、本次枚举缓存在 /tmp/revohuman/glove_hand_register.json（环境变量
+ * REVOHUMAN_HAND_REGISTER_CACHE 可改）；被占 / 读失败的不缓存，照旧按序列号。旧固件没有手别登记，退回序列号。
+ * 同一块 MCU 登记的手别与序列号说法相反 → 拒绝（定位报 RH_ERR_CONFLICT）；在位两块 MCU 声明同一只手 → 都不作数。
+ * C SDK 不读也不写手别注册表 glove_sets.yaml（Python SDK 的 register / set_name 在 C 里没有对应物），
+ * 认不出手别的手套（固件没登记且序列号撞号 / 不带手别）只能用 port / unit_id 定位；登记手别只能用固件配套产测工具。
  *
  * 第一期不含：编码器零位标定写入、腕部相机、MCAP 录制、固件升级、doctor、
  * 基站标定流程。tracker（只读已存标定 + 位姿流）单独成节，见文末。
@@ -118,7 +123,7 @@ enum {
     RH_ERR_INVALID_DATA     = -10,  /* 配置 / 规则文件内容非法 */
     RH_ERR_BUSY             = -11,  /* 串口或 tracker 被别的进程占着；广播 socket 已有活的监听者 */
     RH_ERR_STATE            = -12,  /* 当前状态下不能做（已关闭、录制门关、同步已失去、证据不足…） */
-    RH_ERR_CONFLICT         = -13,  /* 速率冲突、型号与声明不符 */
+    RH_ERR_CONFLICT         = -13,  /* 速率冲突、型号与声明不符、固件登记的手别与序列号相反 */
     RH_ERR_IO               = -14,  /* 串口 / 文件 / socket 读写失败 */
     RH_ERR_INTERNAL         = -99,
 };
@@ -177,8 +182,9 @@ enum {
 typedef int32_t RhTactileState;     /* variant.TactileState */
 enum { RH_TACTILE_STATE_UNKNOWN = 0, RH_TACTILE_STATE_NONE = 1, RH_TACTILE_STATE_TACTILE = 2 };
 
-typedef int32_t RhTactileUnit;      /* TactileData.unit：TYPE_B 且 241 点为 mN，其余 device_native */
-enum { RH_TACTILE_UNIT_DEVICE_NATIVE = 0, RH_TACTILE_UNIT_MN = 1 };
+typedef int32_t RhTactileUnit;      /* 触觉值能不能当力用：TYPE_B 且 241 点为 NEWTON（标定过的力值，用 rh_tactile_newtons
+                                       取牛顿），其余 DEVICE_NATIVE（原始计数，不是力） */
+enum { RH_TACTILE_UNIT_DEVICE_NATIVE = 0, RH_TACTILE_UNIT_NEWTON = 1 };
 
 typedef int32_t RhSyncCause;        /* notices.SyncCause；门开着时为 NONE */
 enum {
@@ -259,6 +265,7 @@ typedef struct RhGlovePair    RhGlovePair;
 typedef struct RhSynchronizer RhSynchronizer;
 typedef struct RhSubscription RhSubscription;
 typedef struct RhKit          RhKit;
+typedef struct RhAutoKit      RhAutoKit;
 typedef struct RhLiveServer   RhLiveServer;
 typedef struct RhTracker      RhTracker;
 
@@ -318,13 +325,14 @@ typedef struct RhSyncStamp {
     uint16_t    _reserved2;
 } RhSyncStamp;
 
-/* Python TactileData。values 只有前 point_count 个有效，是设备原始计数，不是力值。 */
+/* Python TactileData。values 只有前 point_count 个有效，是固件原值：unit == NEWTON 时用 rh_tactile_newtons 换成牛顿，
+ * 不要直接当力用；DEVICE_NATIVE 时是原始计数，不是力。 */
 typedef struct RhTactile {
     uint16_t      point_count;
     uint16_t      age_ms;
     uint8_t       valid;
     uint8_t       link_ok;
-    uint8_t       calibrated;          /* unit == MN 时为 1；TYPE_A 恒 0 */
+    uint8_t       calibrated;          /* unit == NEWTON 时为 1；TYPE_A 恒 0 */
     uint8_t       has_sample_time;     /* 0 = sample_*_ns 无效（映射未就绪）；与帧级标志无关 */
     RhTactileUnit unit;
     uint32_t      device_tick;         /* 触觉自己的采样 tick（ms）；实时流恒有 */
@@ -367,6 +375,12 @@ typedef struct RhPairedFrame {
     RhGloveFrame right;
 } RhPairedFrame;
 
+/* 触觉力值，单位牛顿（N）：unit == RH_TACTILE_UNIT_NEWTON 时把前 point_count 个点换算后写进 out[0..point_count)。
+ * 不看 valid / link_ok，这一帧用不用由调用方定。unit == DEVICE_NATIVE（原始计数，不是力）→ RH_ERR_UNSUPPORTED；
+ * tactile / out 为 NULL、out_len < point_count、point_count > RH_TACTILE_MAX_POINTS → RH_ERR_INVALID_ARG。
+ * 失败不写 out。纯函数，任意线程可调。 */
+RH_API RhStatus rh_tactile_newtons(const RhTactile *tactile, float *out, size_t out_len);
+
 typedef struct RhButtonState {
     uint32_t     struct_size;
     RhButtonMode mode;
@@ -404,14 +418,14 @@ typedef void (*RhButtonEventCallback)(RhFrameKind kind, const RhButtonEvent *eve
 /* Python DiscoveredGlove。probe=0 时 fw_version 及其后字段为空 / 0。 */
 typedef struct RhDiscoveredGlove {
     uint32_t struct_size;
-    RhHand   hand;                       /* 由 MCU 序列号定；撞号 / 认不出 = UNKNOWN（原因见 hand_note） */
+    RhHand   hand;                       /* 固件登记的手别 > MCU 序列号；冲突 / 撞号 / 认不出 = UNKNOWN（原因见 hand_note） */
     char     port[RH_PATH_MAX];          /* 空串 = sysfs 有但节点不可用（不存在 / 重新插拔前的旧节点，约定 9） */
     char     unit_id[RH_ID_MAX];         /* USB 拓扑指纹，身份主键（Python usb_topology_id） */
     uint8_t  registered;                 /* 手别已定（= hand 不为 UNKNOWN） */
     uint8_t  probed;                     /* 1 = 本条确实短连读过设备信息（被占的口为 0） */
     uint8_t  _reserved[2];
     char     usb_serial[RH_SERIAL_MAX];
-    char     hand_source[16];            /* serial / none */
+    char     hand_source[16];            /* register / serial / conflict / none */
     char     hand_note[RH_NOTE_MAX];
     char     tracker_serial[RH_SERIAL_MAX];
     char     fw_version[RH_SERIAL_MAX];
@@ -424,7 +438,8 @@ typedef struct RhDiscoveredGlove {
 
 typedef struct RhScanOptions {
     uint32_t    struct_size;
-    uint8_t     probe;                   /* 默认 0；1 = 短连补齐固件信息。
+    uint8_t     probe;                   /* 默认 0；1 = 短连补齐固件信息，并给还没读过手别登记的单元读一次（写缓存）；
+                                            0 = 固件登记的手别只用缓存里已有的。
                                             C 偏离：被别的进程占着的口跳过不读、不报错（Python 不做 flock 直接连） */
     uint8_t     _reserved[3];
     const char *sysfs_root;              /* NULL / "" → /sys/bus/usb/devices（测试用） */
@@ -439,7 +454,8 @@ RH_API void     rh_scan_free(RhScanList *list);
 /* ───────────────────────────── 单手 ───────────────────────────── */
 
 /* 定位方式三选一（hand / port / unit_id），全空 = 全机恰好一只时裸连。
- * hand 按 MCU 序列号找；序列号撞号 / 认不出 → RH_ERR_NOT_FOUND（E1400），改用 port / unit_id。
+ * hand 按固件登记的手别 > MCU 序列号找：认不出 / 两块撞同一只手 → RH_ERR_NOT_FOUND（E1400），改用 port / unit_id；
+ * 某块 MCU 登记的手别与序列号就这只手说法相反 → RH_ERR_CONFLICT。
  * port 按约定 9 先换到 REVOHUMAN_DEV_DIR 下（设了且条件成立时）。 */
 typedef struct RhGloveTarget {
     RhHand      hand;
@@ -679,10 +695,10 @@ typedef struct RhHandReport {
     char           port[RH_PATH_MAX];
     char           unit_id[RH_ID_MAX];
     char           usb_serial[RH_SERIAL_MAX];
-    char           hand_source[16];      /* serial / none */
+    char           hand_source[16];      /* register / serial / conflict / none */
     char           firmware_sn[RH_SERIAL_MAX];
     char           tracker_serial[RH_SERIAL_MAX];
-    char           tracker_source[16];   /* serial（按序列号定到的单元 HUB 上实挂的那只）/ 空 */
+    char           tracker_source[16];   /* register / serial（按该依据定到的单元 HUB 上实挂的那只）/ 空 */
     char           camera_usb_id[16];
     char           camera_node[RH_PATH_MAX];
     char           tactile_note[RH_NOTE_MAX];
@@ -784,6 +800,72 @@ RH_API RhStatus      rh_kit_synchronizer(RhKit *kit, const RhSynchronizerOptions
 RH_API RhErrorCode   rh_kit_fatal(const RhKit *kit);                    /* RH_E_OK = 无锁存故障 */
 RH_API RhStatus      rh_kit_on_fault(RhKit *kit, RhKitFaultCallback cb, void *user_data);
 RH_API int32_t       rh_kit_status_json(const RhKit *kit, char *buf, size_t buf_len);  /* == kit.status() */
+
+/* ───────────────────────────── 自动整套（autokit） ───────────────────────────── */
+
+/* 自动管理一对手套的打开、重试与重开（C 扩展，Python 没有）。rh_autokit_open 立即返回，打开与关闭都在库里的一条后台线程做；
+ * 调用方轮询每只手的状态（rh_autokit_status）并拉帧（rh_autokit_recv）。规则：
+ *   - 在位 = sysfs 里有、认得出是哪只手的单元（手别依据见文件头；还没读过手别登记的，扫描时短开读一次）。
+ *   - 起始：两只都在位 → 一个双手 kit（同步按 kit.sync，默认 BEST_EFFORT）；否则逐只打开，缺的每 retry_ms 重试；
+ *     之后两只都还没开、又同时在位 → 同样开双手 kit；双手 kit 打不开 → 立即改逐只打开。
+ *   - 一只在单独出数、另一只后来在位：另一只单独开，不打断在出数的那只。开 upgrade_to_pair（默认关）时改为关掉单独的那只、
+ *     整对重开：出数的那只断流约一次打开的时长，open_count 加一；整对没开成就改回逐只，之后要等另一只被拔掉一次才再试，
+ *     不可重试的错（如不支持时间同步）不再试；配对断开过的两只（pair_lost）不升级。
+ *   - 打开失败：可重试的（没插、口忙、超时、识别中重枚举等）retry_ms 后再试；型号 / 变体不符、固件不兼容等 → FAILED，不再试。
+ *   - 断线由 kit 自己重连并重建同步，不会让流结束；流结束（rh_sub_recv_glove 报错）只在上游致命错误时出现，由这里处理：
+ *     单手 kit 关掉、retry_ms 后重开；双手 kit 整个关掉，两只进 AWAIT_PAIR：两只都在位就整对重开；只有一只在位满
+ *     pair_wait_ms 就单独开它，另一只之后也单独开，两只都置 pair_lost，从此不再自动组对（直到 rh_autokit_close）。
+ *   - 该手每（重新）打开一次 open_count 加一；同一 open_count 的帧、身份与设备信息来自同一条流。
+ * 降级都显式给出：paired = 在双手 kit 里；synchronized = paired 且硬件同步（rh_pair_synchronized）；pair_lost 见上。
+ * 线程：status / recv / identity / glove_info 可从任意线程并发调用；recv 在锁外读，非 0 的 timeout_ms 不挡别的调用。
+ * rh_autokit_close 可与别的线程上的这些调用并发：先等在途的调用返回（recv 最多等它的 timeout_ms），再停后台线程、关全部
+ * 订阅与 kit；close 开始之后进来的调用报 RH_ERR_INVALID_ARG（句柄已关）。 */
+typedef int32_t RhAutoState;
+enum { RH_AUTO_ABSENT = 0, RH_AUTO_OPENING = 1, RH_AUTO_AWAIT_PAIR = 2, RH_AUTO_STREAMING = 3, RH_AUTO_FAILED = 4 };
+
+typedef struct RhAutoKitOptions {
+    uint32_t     struct_size;
+    uint32_t     retry_ms;               /* 默认 2000 */
+    uint32_t     pair_wait_ms;           /* 默认 10000：配对断开后只回来一只时，等多久再单独开它 */
+    uint32_t     queue_size;             /* 默认 256：每只手套的订阅队列 */
+    RhKitOptions kit;                    /* hands 只认 BOTH；sync 默认 BEST_EFFORT；其余同 rh_kit_open */
+    uint8_t      upgrade_to_pair;        /* 默认 0；1 = 单独出数的一只在另一只到位时升级成整对（见上） */
+    uint8_t      _reserved[7];
+} RhAutoKitOptions;
+
+typedef struct RhAutoHandStatus {
+    uint32_t          struct_size;
+    RhAutoState       state;
+    uint32_t          open_count;
+    uint8_t           paired;
+    uint8_t           synchronized;
+    uint8_t           pair_lost;
+    uint8_t           absent;            /* 最近一次打开失败是因为没插手套 */
+    uint8_t           capture_ok;        /* STREAMING 时有效（rh_glove_capture_ok） */
+    uint8_t           _reserved[3];
+    RhSyncCause       capture_cause;
+    RhErrorCode       last_error;        /* 最近一次打开失败或流结束的码；成功打开后清零 */
+    uint32_t          _reserved2;
+    uint64_t          dropped;           /* 本次打开以来 SDK 丢的帧（rh_sub_dropped） */
+    char              last_error_text[256];  /* ABSENT 时还带上认不出手别的在位手套的 hand_note（如两只序列号相同） */
+} RhAutoHandStatus;
+
+RH_API void     rh_autokit_options_init(RhAutoKitOptions *opts);
+/* opts 为 NULL = 全默认；kit.hands 不是 BOTH、retry_ms 或 queue_size 为 0、速率非法 → RH_ERR_INVALID_ARG。 */
+RH_API RhStatus rh_autokit_open(const RhAutoKitOptions *opts, RhAutoKit **out);
+/* 等在途的调用返回、后台线程做完手上的一步，再关掉全部订阅与 kit。NULL 安全；不能在库回调线程里调。 */
+RH_API void     rh_autokit_close(RhAutoKit *autokit);
+/* 该手的状态快照。 */
+RH_API RhStatus rh_autokit_status(RhAutoKit *autokit, RhHand hand, RhAutoHandStatus *out);
+/* 该手当前流的下一帧（同 rh_sub_recv_glove），open_count 非 NULL 时写入帧所属的打开序号。不在出数 → RH_ERR_STATE；
+ * 没帧 → RH_ERR_TIMEOUT；流结束 → rh_sub_recv_glove 的错误，后台线程随即按上面的规则处理。 */
+RH_API RhStatus rh_autokit_recv(RhAutoKit *autokit, RhHand hand, int32_t timeout_ms, RhGloveFrame *out,
+                                uint32_t *open_count);
+/* 该手当前流的产品身份（同 rh_kit_identity）/ 设备信息（同 rh_glove_info，打开时取的快照）。open_count 非 NULL 时写入
+ * 对应的打开序号，与 rh_autokit_recv 给的相同才是同一条流。不在出数 → RH_ERR_STATE；out 为 NULL 或 struct_size 太小
+ * → RH_ERR_INVALID_ARG；失败不写 out。 */
+RH_API RhStatus rh_autokit_identity(RhAutoKit *autokit, RhHand hand, RhProductIdentity *out, uint32_t *open_count);
+RH_API RhStatus rh_autokit_glove_info(RhAutoKit *autokit, RhHand hand, RhGloveInfo *out, uint32_t *open_count);
 
 /* ───────────────────────────── 本机广播 ───────────────────────────── */
 
