@@ -80,7 +80,7 @@ typedef struct RhHandModelInfo {
     char        urdf_sha256[65];     /* 64 位小写十六进制 + NUL */
     uint32_t    points_version;      /* 该型号点集（rh_hand_points）的契约版本 = RH_HAND_POINTS_VERSION；0 = 库未提供点集 */
     double      tip_length_m[5];     /* 指尖 TIP 到 DIP link 原点的距离，米；顺序食、中、无名、小、拇；两只手相同 */
-    char        tip_source[48];      /* 指尖常量的来源说明，如 "cap-mesh@4e7da46"，NUL 结尾 */
+    char        tip_source[48];      /* 指尖常量的来源说明，如 "dip-mesh@ea8e2e3a"，NUL 结尾 */
 } RhHandModelInfo;
 
 RH_API RhStatus rh_hand_model_info(RhHandModel model, RhHandModelInfo *out);

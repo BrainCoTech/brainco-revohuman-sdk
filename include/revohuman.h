@@ -37,6 +37,7 @@
  *    同一帧的 `sample_wall_ns − sample_mono_ns` 等于映射那一刻的 `rh_wall_offset_ns()`；
  *    该偏移之后刷新（主机改时 / 时间同步步进）不回算已经发出的帧。两手共用同一个偏移。
  * 7. 本 API 不提供任何写设备序列号的入口（只读 `rh_glove_get_sn()`），也不提供私有入口。
+ *    触觉去皮（见「触觉去皮」节）只发一条固定的去皮请求，不写序列号、手别、标定或任何配置。
  * 8. 运行期提示走日志，文本以 "N2xxx " 开头（与 Python notices 同码），上位机按前 5 个字符过滤。
  * 9. 设备节点目录：串口 / 相机节点默认在 /dev 下找；环境变量 REVOHUMAN_DEV_DIR 非空时改在它下面找
  *    （容器把宿主 /dev 挂到别处时用），每次扫描 / 定位时现读，不要在别的线程同时改它。
@@ -185,6 +186,13 @@ enum { RH_TACTILE_STATE_UNKNOWN = 0, RH_TACTILE_STATE_NONE = 1, RH_TACTILE_STATE
 typedef int32_t RhTactileUnit;      /* 触觉值能不能当力用：TYPE_B 且 241 点为 NEWTON（标定过的力值，用 rh_tactile_newtons
                                        取牛顿），其余 DEVICE_NATIVE（原始计数，不是力） */
 enum { RH_TACTILE_UNIT_DEVICE_NATIVE = 0, RH_TACTILE_UNIT_NEWTON = 1 };
+
+typedef int32_t RhTactileTransport; /* Python Glove.tactile_transport：当前流的触觉走哪条路 */
+enum {
+    RH_TACTILE_TRANSPORT_NONE     = 0,  /* C 扩展：型号不带触觉（Python 此时也报 combined） */
+    RH_TACTILE_TRANSPORT_COMBINED = 1,  /* 组合帧（每个编码器帧带模块最近一个样本；没请求分包、固件不支持或还没起流） */
+    RH_TACTILE_TRANSPORT_SPLIT    = 2,  /* 分包（每个模块样本单独一个包，经 rh_glove_tactile_subscribe 逐个交出） */
+};
 
 typedef int32_t RhSyncCause;        /* notices.SyncCause；门开着时为 NONE */
 enum {
@@ -375,6 +383,31 @@ typedef struct RhPairedFrame {
     RhGloveFrame right;
 } RhPairedFrame;
 
+/* Python TactileSample：分包会话（RhGloveOptions.split_tactile = 1 且固件支持）里的一个触觉样本，
+ * 固件每提交一个模块样本发一个包，经 rh_glove_tactile_subscribe 逐个交出。
+ * 时间戳语义与帧上的触觉不同：tactile.device_tick 取「完整样本最后一个 UART 字节收完」的估计，
+ * 通常早于组合帧里的触觉 tick 几毫秒；两种模式录的数据不要混在一起比。
+ * tactile.valid = 0 的是只报健康的包（固件无效期间约 100ms 一个），point_count 可能为 0。 */
+typedef struct RhTactileSample {
+    uint32_t  struct_size;
+    RhHand    hand;                      /* 裸连时 UNKNOWN */
+    uint32_t  generation;                /* 与 RhGloveFrame.generation 同口径 */
+    uint32_t  packet_seq;                /* 包序号（含只报健康的包，逐包 +1） */
+    uint32_t  tactile_seq;               /* 触觉样本序号（只报健康的包不推进） */
+    uint32_t  cycle_sequence;            /* 收到该模块样本时所在的编码器周期号（与 RhSyncStamp.cycle_sequence 同一计数） */
+    uint16_t  frame_number;              /* 收到模块样本时的 USB 帧号，mod 2048（与 RhSyncStamp.frame_number 同一计数）；frame_stamp_valid = 0 时为 0、不可用 */
+    uint16_t  frame_elapsed_us;          /* 距该 USB 帧起点的微秒数；同上 */
+    uint8_t   frame_stamp_valid;
+    uint8_t   overflow;                  /* 上一包之后设备队列溢出过 */
+    uint8_t   gate_open;                 /* 0 = 录制门关着时派给免门订阅的样本（只能看，不能拿来对齐） */
+    uint8_t   _reserved0;
+    uint32_t  dropped_samples;           /* 本次起流以来设备队列溢出丢掉的样本（累计，重连后从 0 数） */
+    uint32_t  _reserved1;
+    int64_t   recv_wall_ns;              /* 主机收到该包的时刻（不是采样时刻） */
+    RhTactile tactile;                   /* 采样时刻见 tactile.sample_*_ns（has_sample_time） */
+    uint64_t  _reserved_tail[4];
+} RhTactileSample;
+
 /* 触觉力值，单位牛顿（N）：unit == RH_TACTILE_UNIT_NEWTON 时把前 point_count 个点换算后写进 out[0..point_count)。
  * 不看 valid / link_ok，这一帧用不用由调用方定。unit == DEVICE_NATIVE（原始计数，不是力）→ RH_ERR_UNSUPPORTED；
  * tactile / out 为 NULL、out_len < point_count、point_count > RH_TACTILE_MAX_POINTS → RH_ERR_INVALID_ARG。
@@ -412,6 +445,7 @@ typedef struct RhButtonEvent {
 typedef void (*RhGloveFrameCallback)(RhFrameKind kind, const RhGloveFrame *frame, void *user_data);
 typedef void (*RhPairedFrameCallback)(RhFrameKind kind, const RhPairedFrame *frame, void *user_data);
 typedef void (*RhButtonEventCallback)(RhFrameKind kind, const RhButtonEvent *event, void *user_data);
+typedef void (*RhTactileSampleCallback)(RhFrameKind kind, const RhTactileSample *sample, void *user_data);
 
 /* ───────────────────────────── 发现 ───────────────────────────── */
 
@@ -468,7 +502,9 @@ typedef struct RhGloveOptions {
     double      rate_hz;                 /* 默认 200；速率属于连接，订阅不能改 */
     uint8_t     require_tactile;         /* 默认 0；1 = 型号不带或判不出触觉即拒连 */
     uint8_t     button;                  /* 默认 0；1 = 启用按键上报 */
-    uint8_t     _reserved[2];
+    uint8_t     split_tactile;           /* 默认 0；1 = 开流时请求触觉分包（见 rh_glove_tactile_subscribe），
+                                            固件不支持时照常连接、按组合帧走 */
+    uint8_t     _reserved[1];
     uint32_t    sync_loss_debounce;      /* C 扩展（Python 固定 5）：默认 5；连续几帧不在当前同步会话代上才判丢；< 1 按 1 */
 } RhGloveOptions;
 
@@ -579,6 +615,17 @@ RH_API RhStatus rh_glove_button_read(RhGlove *glove, RhButtonState *out);   /* �
 RH_API RhStatus rh_glove_button_subscribe(RhGlove *glove, const RhSubscribeOptions *opts,
                                           RhButtonEventCallback cb, void *user_data, RhSubscription **out);
 
+/* 触觉分包（Python split_tactile / subscribe_tactile）。connect 时 split_tactile=1 且固件支持时，
+ * 固件每提交一个模块样本发一个包，模块的全部样本都能拿到；帧上的 tactile 仍在，取模块最近一个样本
+ * （帧上 tactile.valid = 0 表示最近一个样本太旧）。没请求分包或固件不支持时帧照旧带触觉、本订阅收不到样本。
+ * opts 为 NULL：队列 512、受录制门约束；给了 opts 按 opts（注意 rh_subscribe_options_init 给的默认是 64，
+ * 样本速率高于帧速率，按 64 容易溢出）。错误同 rh_glove_subscribe；型号不带触觉时照常给订阅，但收不到样本。
+ * 回调在派发线程里跑，不要阻塞。 */
+RH_API RhStatus rh_glove_tactile_subscribe(RhGlove *glove, const RhSubscribeOptions *opts,
+                                           RhTactileSampleCallback cb, void *user_data, RhSubscription **out);
+/* 当前流实际用的触觉传输方式；glove 为 NULL 返回 NONE。 */
+RH_API RhTactileTransport rh_glove_tactile_transport(const RhGlove *glove);
+
 /* ───────────────────────────── 订阅（通用） ───────────────────────────── */
 
 /* 拉取模式取一条；类型须与订阅来源一致，否则 RH_ERR_INVALID_ARG。
@@ -586,6 +633,7 @@ RH_API RhStatus rh_glove_button_subscribe(RhGlove *glove, const RhSubscribeOptio
 RH_API RhStatus rh_sub_recv_glove(RhSubscription *sub, int32_t timeout_ms, RhGloveFrame *out);
 RH_API RhStatus rh_sub_recv_paired(RhSubscription *sub, int32_t timeout_ms, RhPairedFrame *out);
 RH_API RhStatus rh_sub_recv_button(RhSubscription *sub, int32_t timeout_ms, RhButtonEvent *out);
+RH_API RhStatus rh_sub_recv_tactile(RhSubscription *sub, int32_t timeout_ms, RhTactileSample *out);
 RH_API uint64_t rh_sub_dropped(const RhSubscription *sub);     /* 本订阅因队列满丢掉的累计条数 */
 /* 在别的线程调：等回调线程退出后返回。在本订阅自己的回调里调：立即返回，回调返回后回收。 */
 RH_API void     rh_sub_close(RhSubscription *sub);
@@ -845,7 +893,7 @@ typedef struct RhAutoHandStatus {
     uint8_t           _reserved[3];
     RhSyncCause       capture_cause;
     RhErrorCode       last_error;        /* 最近一次打开失败或流结束的码；成功打开后清零 */
-    uint32_t          _reserved2;
+    uint32_t          tactile_dropped;   /* 本次打开以来触觉样本订阅丢的条数（超出按 UINT32_MAX 封顶）；没开分包为 0 */
     uint64_t          dropped;           /* 本次打开以来 SDK 丢的帧（rh_sub_dropped） */
     char              last_error_text[256];  /* ABSENT 时还带上认不出手别的在位手套的 hand_note（如两只序列号相同） */
 } RhAutoHandStatus;
@@ -861,11 +909,108 @@ RH_API RhStatus rh_autokit_status(RhAutoKit *autokit, RhHand hand, RhAutoHandSta
  * 没帧 → RH_ERR_TIMEOUT；流结束 → rh_sub_recv_glove 的错误，后台线程随即按上面的规则处理。 */
 RH_API RhStatus rh_autokit_recv(RhAutoKit *autokit, RhHand hand, int32_t timeout_ms, RhGloveFrame *out,
                                 uint32_t *open_count);
+/* 该手当前流的下一个触觉样本（同 rh_sub_recv_tactile），规则同 rh_autokit_recv。kit.glove.split_tactile = 1 时
+ * 每次打开都开一条触觉订阅（队列 512、走门）；没设 → RH_ERR_UNSUPPORTED。固件不支持分包时一直 RH_ERR_TIMEOUT，
+ * 触觉照旧在帧上（rh_glove_tactile_transport 可查）。 */
+RH_API RhStatus rh_autokit_recv_tactile(RhAutoKit *autokit, RhHand hand, int32_t timeout_ms, RhTactileSample *out,
+                                        uint32_t *open_count);
 /* 该手当前流的产品身份（同 rh_kit_identity）/ 设备信息（同 rh_glove_info，打开时取的快照）。open_count 非 NULL 时写入
  * 对应的打开序号，与 rh_autokit_recv 给的相同才是同一条流。不在出数 → RH_ERR_STATE；out 为 NULL 或 struct_size 太小
  * → RH_ERR_INVALID_ARG；失败不写 out。 */
 RH_API RhStatus rh_autokit_identity(RhAutoKit *autokit, RhHand hand, RhProductIdentity *out, uint32_t *open_count);
 RH_API RhStatus rh_autokit_glove_info(RhAutoKit *autokit, RhHand hand, RhGloveInfo *out, uint32_t *open_count);
+
+/* ───────────────────────────── 触觉去皮 ───────────────────────────── */
+
+/* 触觉硬件去皮：库向手套发一条固定的去皮请求，手套把命令转给触觉模块，由模块以当下读数为零点。
+ * 这是对设备的写入：只在手套静止、触觉面没被触碰时请求，请求之后约 3 s 内保持不碰。
+ *   - rh_glove_tactile_tare_request 立即返回，流程在库的后台线程里跑；结果用 rh_glove_tactile_tare_status 轮询，
+ *     version 变了就是有新状态。
+ *   - 成功的终态是 RH_TARE_RESULT_SENT：去皮命令已发送，模块是否完成未确认（手套不回报模块完成）。
+ *   - 库在任何情况下都不自动重发。结果待确认（UNCONFIRMED / TIMEOUT / ABANDONED）时由调用方决定要不要再请求。
+ *   - 长按手套按键约 2 s 也会去皮，与主机请求共用设备上的请求序号；流在跑时库每秒读一次请求记录，
+ *     按键或别的主机发起的去皮会出现在 origin / outcome 里（并记一条 INFO 日志）。
+ *   - 能否由主机触发在每次（重）连、开流之前查一次；查到之前 support = UNKNOWN。
+ *   - 请求记录在手套主控的内存里，主控复位即清空（mcu_reset = 1）；去皮之后手套重连过时 stale = 1，
+ *     这两种情况下模块零点是否保持都未确认，tared 置 0。
+ * 去皮不改变帧里触觉数据的格式与单位。线程：两个函数都可从任意线程（含库回调线程）调用，request 不阻塞。 */
+typedef int32_t RhTareSupport;
+enum { RH_TARE_SUPPORT_UNKNOWN = 0, RH_TARE_SUPPORT_SUPPORTED = 1, RH_TARE_SUPPORT_UNSUPPORTED = 2 };
+
+/* 最近一次去皮请求（不论谁发起）由谁发起。 */
+typedef int32_t RhTareOrigin;
+enum {
+    RH_TARE_ORIGIN_NONE       = 0,
+    RH_TARE_ORIGIN_THIS_HOST  = 1,   /* 本句柄发起 */
+    RH_TARE_ORIGIN_BUTTON     = 2,   /* 手套按键 */
+    RH_TARE_ORIGIN_OTHER_HOST = 3,   /* 主机入口，但不是本句柄（别的进程 / 之前的连接） */
+    RH_TARE_ORIGIN_UNKNOWN    = 4,
+};
+
+/* 最近一次去皮请求（不论谁发起）的结论。 */
+typedef int32_t RhTareOutcome;
+enum {
+    RH_TARE_OUTCOME_NONE       = 0,  /* 设备上没有请求记录 */
+    RH_TARE_OUTCOME_PENDING    = 1,  /* 手套已接受，处理中 */
+    RH_TARE_OUTCOME_SENT       = 2,  /* 去皮命令已发送，模块是否完成未确认 */
+    RH_TARE_OUTCOME_FAILED     = 3,
+    RH_TARE_OUTCOME_CANCELLED  = 4,
+    RH_TARE_OUTCOME_IDLE       = 5,  /* 记录状态异常 */
+    RH_TARE_OUTCOME_SUPERSEDED = 6,  /* 本句柄的请求被另一次请求覆盖 */
+    RH_TARE_OUTCOME_TIMEOUT    = 7,  /* 本句柄等结论超时 */
+};
+
+/* 本句柄最近一次 rh_glove_tactile_tare_request 的结局。 */
+typedef int32_t RhTareResult;
+enum {
+    RH_TARE_RESULT_NONE        = 0,  /* 没请求过 */
+    RH_TARE_RESULT_RUNNING     = 1,
+    RH_TARE_RESULT_SENT        = 2,  /* 去皮命令已发送，模块是否完成未确认 */
+    RH_TARE_RESULT_REJECTED    = 3,  /* 手套当场拒绝（不支持 / 忙 / 模块离线 / 数据无效 / 内部错误），没有去皮 */
+    RH_TARE_RESULT_NOT_SENT    = 4,  /* 发送前读请求记录失败，请求没发 */
+    RH_TARE_RESULT_UNCONFIRMED = 5,  /* 请求的应答丢了、记录也没见推进：是否被接受待确认 */
+    RH_TARE_RESULT_FAILED      = 6,  /* 手套报失败（命令可能已经发出） */
+    RH_TARE_RESULT_CANCELLED   = 7,
+    RH_TARE_RESULT_SUPERSEDED  = 8,  /* 被另一次请求覆盖 */
+    RH_TARE_RESULT_TIMEOUT     = 9,  /* 等结论超时（期间连接中断也归这里）：结果待确认 */
+    RH_TARE_RESULT_ABANDONED   = 10, /* 等结论期间句柄被关闭：结果待确认 */
+};
+
+typedef struct RhTactileTareStatus {
+    uint32_t      struct_size;
+    RhTareSupport support;
+    uint8_t       in_progress;       /* 本句柄的请求进行中 */
+    uint8_t       tared;             /* outcome == SENT 且之后没重连、主控没复位 */
+    uint8_t       stale;             /* 最近一次去皮之后手套重连过（或去皮早于本次连接） */
+    uint8_t       mcu_reset;         /* 设备上的请求记录被清空：手套主控复位过 */
+    uint8_t       has_record;        /* 读到过设备上的请求记录 */
+    uint8_t       _reserved[3];
+    RhTareOrigin  origin;
+    RhTareOutcome outcome;
+    RhTareResult  request_result;
+    uint32_t      sequence;          /* 设备请求序号（has_record 时有效）：按键与主机共用，每接受一次加一，回绕 */
+    uint64_t      requests;          /* 本句柄收下的请求次数 */
+    uint64_t      version;           /* 状态每变一次加一 */
+    uint64_t      poll_errors;       /* 读请求记录失败的次数 */
+    int64_t       outcome_wall_ns;   /* outcome 成立的主机时刻，0 = 没有 */
+    int64_t       request_wall_ns;   /* request_result 落定的主机时刻，0 = 没有 */
+    int64_t       record_wall_ns;    /* 最近一次读到请求记录的主机时刻，0 = 没读到过 */
+    char          message[RH_NOTE_MAX];          /* outcome 的说明 */
+    char          request_message[RH_NOTE_MAX];  /* request_result 的说明（如拒绝原因） */
+    char          support_message[RH_NOTE_MAX];  /* 为什么不支持 / 还没查成 */
+} RhTactileTareStatus;
+
+/* 请求一次去皮，立即返回。收下 → RH_OK，结果见 rh_glove_tactile_tare_status。收不下（不发任何请求）：
+ *   型号不带触觉 → RH_ERR_UNSUPPORTED（E1800）；固件不支持主机触发 → RH_ERR_UNSUPPORTED（E1202），可改用按键去皮；
+ *   能力还没查到 / 流没在跑（连接中、重连中、维护中）/ 上一次还在进行 → RH_ERR_STATE；句柄已关 → RH_ERR_DISCONNECTED。 */
+RH_API RhStatus rh_glove_tactile_tare_request(RhGlove *glove);
+/* 去皮状态快照；out 为 NULL 或 struct_size 太小 → RH_ERR_INVALID_ARG。 */
+RH_API RhStatus rh_glove_tactile_tare_status(const RhGlove *glove, RhTactileTareStatus *out);
+/* autokit 里该手当前流的去皮（同上两个函数）。open_count 非 NULL 时写入对应的打开序号；每次重新打开状态从头算。
+ * 不在出数 → RH_ERR_STATE。 */
+RH_API RhStatus rh_autokit_tactile_tare_request(RhAutoKit *autokit, RhHand hand, uint32_t *open_count);
+RH_API RhStatus rh_autokit_tactile_tare_status(RhAutoKit *autokit, RhHand hand, RhTactileTareStatus *out,
+                                               uint32_t *open_count);
 
 /* ───────────────────────────── 本机广播 ───────────────────────────── */
 
