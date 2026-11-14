@@ -1,6 +1,7 @@
-/* 最小示例：不接手套，确认 SDK 能链接、能调用。
- *   打印版本与模型指纹，把 21 个关节角全置 0（PTV1 映射）做一次左手 FK，打印关节表最后一个 link 的位置。
- * 退出码 0 = 全部调用成功。 */
+/* Minimal example: no glove needed; checks that the SDK links and can be called.
+ *   Prints the version and the model fingerprint, runs left-hand FK with all 21 joint angles set to 0 (PTV1 mapping),
+ *   and prints the position of the last link in the joint table.
+ * Exit code 0 = all calls succeeded. */
 #include <stdio.h>
 #include <string.h>
 #include <revohuman_fk.h>

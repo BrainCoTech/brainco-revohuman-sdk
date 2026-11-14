@@ -1,58 +1,80 @@
 /*
  * RevoHuman SDK — C API
  *
- * v0.1.3。功能面对齐 Python 包 `revohuman` 0.1.1，
- * 本机广播与 Python 侧 `revohuman.live` schema 1 兼容，现有 `simulation/` 查看器不改一行即可接。
- * C 有意偏离 Python 的地方在对应字段旁注明（「C 偏离」「C 扩展」）。
+ * v0.1.3. Feature coverage matches the Python package `revohuman` 0.1.1. The local broadcast is compatible with
+ * schema 1 of the Python `revohuman.live`, so the existing viewer in the Python SDK's `simulation/` connects unchanged.
+ * Places where C deliberately departs from Python are marked next to the field ("C deviation", "C extension").
  *
- * ── 约定 ────────────────────────────────────────────────────────────────────
- * 1. 返回值：多数函数返回 RhStatus（0 = 成功，负数 = 失败大类）。失败细节是**线程局部**的：
- *    `rh_last_error_code()` 给与 Python `revohuman.ErrorCode` 逐值相同的数字码（E1102 …），
- *    `rh_last_error()` 给与 Python `format_error()` 同格式的串（"E1102 PortBusyError: …"）。
- *    成功的调用不清除上一次的错误。
- * 2. 字符串出参：`(char *buf, size_t buf_len)`，返回所需长度（不含结尾 NUL）或负的 RhStatus；
- *    `buf_len > 0` 时总会写入以 NUL 结尾的（可能被截断的）内容；`buf_len == 0` 只问长度。
- * 3. 结构体版本：凡是独立跨越 API 的结构，首字段都是 `uint32_t struct_size`。
- *    - 选项结构：`rh_xxx_options_init(&opts)` 填 struct_size 与 Python 同名参数的默认值，再改要改的字段；
- *      选项指针传 NULL 等价于全默认。
- *    - 出参结构：调用前由调用方置 `struct_size = sizeof(结构)`，推荐写 `RhGloveInfo info = RH_STRUCT_INIT(RhGloveInfo);`。
- *      库只写前 struct_size 字节；struct_size 小于该结构首个发布版本的大小 → RH_ERR_INVALID_ARG。
- *    - 回调里收到的帧由库填 struct_size（= 库自己的 sizeof），调用方只读自己认得的字段即可。
- *    - 嵌在别的结构里的结构（RhSyncStamp、RhTactile、RhPairedFrame 的 left/right、RhProductIdentity 的
- *      left/right）在同一主版本内布局冻结；RhGloveFrame 尾部留了保留字给第二期。
- * 4. 句柄：`rh_*_connect / open / create / start` 产出，`rh_*_close / stop` 释放，均对 NULL 安全。
- *    `rh_pair_glove()` / `rh_kit_glove()` 等返回的是**借用**指针，随父句柄释放，不要单独关。
- *    关父句柄时，它下面还开着的订阅各收一次 RH_FRAME_END；订阅句柄本身仍要 `rh_sub_close()` 释放
- *    （父句柄关掉之后再调也安全）。`rh_shutdown()` 会强制关掉全部未释放的句柄，之后不要再碰任何句柄。
- * 5. 订阅：每个订阅一条有界队列（满了丢最旧）。
- *    - 回调模式：库为该订阅起一条线程顺序调用回调；回调里拿到的 frame 指针只在回调期间有效；
- *      不要在回调里阻塞太久（队列会满、丢最旧并收到 RH_FRAME_LAG）。
- *    - 拉取模式：回调传 NULL，用 `rh_sub_recv_*()` 按超时取，帧拷进调用方的结构。
- *    - 在本订阅**自己的**回调里调 `rh_sub_close()` 是允许的：立即返回、之后不再回调，句柄在回调返回后由库回收。
- *    - 在任何本库回调线程里关**父句柄**（rh_glove_close / rh_pair_close / rh_synchronizer_close /
- *      rh_kit_close / rh_live_stop / rh_shutdown）不执行：库记一条 ERROR 日志后直接返回。要从回调里触发关闭，
- *      请通知别的线程去关。
- * 6. 时间：`*_wall_ns` = CLOCK_REALTIME 纳秒，`*_mono_ns` = CLOCK_MONOTONIC 纳秒。
- *    `sample_*` 是设备采样刻映射到主机时轴的结果；`recv_wall_ns` 是主机收到该帧的时刻。
- *    同一帧的 `sample_wall_ns − sample_mono_ns` 等于映射那一刻的 `rh_wall_offset_ns()`；
- *    该偏移之后刷新（主机改时 / 时间同步步进）不回算已经发出的帧。两手共用同一个偏移。
- * 7. 本 API 不提供任何写设备序列号的入口（只读 `rh_glove_get_sn()`），也不提供私有入口。
- *    触觉去皮（见「触觉去皮」节）只发一条固定的去皮请求，不写序列号、手别、标定或任何配置。
- * 8. 运行期提示走日志，文本以 "N2xxx " 开头（与 Python notices 同码），上位机按前 5 个字符过滤。
- * 9. 设备节点目录：串口 / 相机节点默认在 /dev 下找；环境变量 REVOHUMAN_DEV_DIR 非空时改在它下面找
- *    （容器把宿主 /dev 挂到别处时用），每次扫描 / 定位时现读，不要在别的线程同时改它。
- *    显式给的 port 是 /dev/... 而它本身不存在、该目录下同名节点存在时，换成后者再连。
+ * ── Conventions ─────────────────────────────────────────────────────────────
+ * 1. Return values: most functions return RhStatus (0 = success, negative = failure category). Failure details are
+ *    **thread-local**: `rh_last_error_code()` gives a numeric code identical in value to Python's `revohuman.ErrorCode`
+ *    (E1102 …), and `rh_last_error()` gives a string in the same format as Python's `format_error()`
+ *    ("E1102 PortBusyError: …"). A successful call does not clear the previous error.
+ * 2. String outputs: `(char *buf, size_t buf_len)`, returning the required length (excluding the terminating NUL) or a
+ *    negative RhStatus. When `buf_len > 0` a NUL-terminated (possibly truncated) string is always written;
+ *    `buf_len == 0` only queries the length.
+ * 3. Struct versioning: every struct that crosses the API on its own starts with `uint32_t struct_size`.
+ *    - Option structs: `rh_xxx_options_init(&opts)` fills in struct_size and the defaults of the same-named Python
+ *      parameters; then change the fields you need. Passing NULL as the options pointer means all defaults.
+ *    - Output structs: the caller sets `struct_size = sizeof(struct)` before the call; the recommended form is
+ *      `RhGloveInfo info = RH_STRUCT_INIT(RhGloveInfo);`. The library writes only the first struct_size bytes;
+ *      a struct_size smaller than the size of the struct's first released version → RH_ERR_INVALID_ARG.
+ *    - Frames received in callbacks have struct_size filled in by the library (= the library's own sizeof); the
+ *      caller only reads the fields it knows.
+ *    - Structs embedded in other structs (RhSyncStamp, RhTactile, left/right of RhPairedFrame, left/right of
+ *      RhProductIdentity) have a frozen layout within a major version; RhGloveFrame keeps reserved words at its tail
+ *      for later versions.
+ * 4. Handles: produced by `rh_*_connect / open / create / start` and released by `rh_*_close / stop`; all of these
+ *    are NULL-safe. `rh_pair_glove()` / `rh_kit_glove()` and similar return **borrowed** pointers that are released
+ *    with the parent handle; do not close them separately. When a parent handle is closed, each subscription still
+ *    open under it receives one RH_FRAME_END; the subscription handle itself must still be released with
+ *    `rh_sub_close()` (calling it after the parent handle is closed is safe). `rh_shutdown()` force-closes all
+ *    unreleased handles; do not touch any handle afterwards.
+ * 5. Subscriptions: each subscription has one bounded queue (when full, the oldest item is dropped).
+ *    - Callback mode: the library starts one thread per subscription that calls the callback sequentially; the frame
+ *      pointer received in the callback is valid only during the callback. Do not block in the callback for long
+ *      (the queue fills up, the oldest items are dropped and you receive RH_FRAME_LAG).
+ *    - Pull mode: pass NULL as the callback and take items with `rh_sub_recv_*()` with a timeout; frames are copied
+ *      into the caller's struct.
+ *    - Calling `rh_sub_close()` from this subscription's **own** callback is allowed: it returns immediately, no
+ *      further callbacks are made, and the library reclaims the handle after the callback returns.
+ *    - Closing a **parent handle** (rh_glove_close / rh_pair_close / rh_synchronizer_close / rh_kit_close /
+ *      rh_live_stop / rh_shutdown) from any callback thread of this library is not carried out: the library logs an
+ *      ERROR and returns. To trigger a close from a callback, signal another thread to do it.
+ * 6. Time: `*_wall_ns` = CLOCK_REALTIME nanoseconds, `*_mono_ns` = CLOCK_MONOTONIC nanoseconds.
+ *    `sample_*` is the device sampling instant mapped onto the host time axis; `recv_wall_ns` is when the host
+ *    received the frame. For one frame, `sample_wall_ns − sample_mono_ns` equals `rh_wall_offset_ns()` at the moment
+ *    of mapping; later refreshes of that offset (host clock changes / time-sync steps) are not applied to frames
+ *    already delivered. Both hands share the same offset.
+ * 7. This API offers no entry point for writing the device serial number (it only reads it, via `rh_glove_get_sn()`),
+ *    and no private entry points. Tactile tare (see the "Tactile tare" section) sends only one fixed tare request; it
+ *    does not write the serial number, handedness, calibration or any configuration.
+ * 8. Runtime notices go to the log; their text starts with "N2xxx " (same codes as Python notices), so a host
+ *    application can filter on the first 5 characters.
+ * 9. Device node directory: serial and camera nodes are looked up under /dev by default; when the environment variable
+ *    REVOHUMAN_DEV_DIR is non-empty they are looked up under it instead (for containers that mount the host's /dev
+ *    elsewhere). It is read afresh on every scan / lookup; do not change it from another thread meanwhile.
+ *    If an explicitly given port is /dev/... and does not exist while a node of the same name exists under that
+ *    directory, the latter is used for the connection.
  *
- * 手别依据：MCU 固件登记的手别（固件 0.20.3 起；新一批手套的 USB 序列号不再带 L / R）> MCU 序列号。
- * 固件登记的手别只能经串口读：连接前定位（含断线重连）、rh_scan 的 probe、autokit 的在位扫描各给还没读过的在位 MCU
- * 短开一次只读，结果按本次开机、本次枚举缓存在 /tmp/revohuman/glove_hand_register.json（环境变量
- * REVOHUMAN_HAND_REGISTER_CACHE 可改）；被占 / 读失败的不缓存，照旧按序列号。旧固件没有手别登记，退回序列号。
- * 同一块 MCU 登记的手别与序列号说法相反 → 拒绝（定位报 RH_ERR_CONFLICT）；在位两块 MCU 声明同一只手 → 都不作数。
- * C SDK 不读也不写手别注册表 glove_sets.yaml（Python SDK 的 register / set_name 在 C 里没有对应物），
- * 认不出手别的手套（固件没登记且序列号撞号 / 不带手别）只能用 port / unit_id 定位；登记手别只能用固件配套产测工具。
+ * Handedness source: handedness registered in the MCU firmware (firmware 0.20.3 and later; the USB serial numbers of
+ * newer gloves no longer carry L / R) > MCU serial number.
+ * The registered handedness can only be read over the serial port: the pre-connect lookup (including reconnects),
+ * rh_scan's probe and autokit's presence scan each open every present MCU that has not been read yet once, briefly
+ * and read-only. Results are cached per boot and per enumeration in /tmp/revohuman/glove_hand_register.json
+ * (override with the environment variable REVOHUMAN_HAND_REGISTER_CACHE); ports that are busy or fail to read are not
+ * cached and fall back to the serial number. Older firmware has no registered handedness and falls back to the serial
+ * number.
+ * An MCU whose registered handedness contradicts its serial number → rejected (the lookup reports RH_ERR_CONFLICT);
+ * two present MCUs claiming the same hand → neither counts.
+ * The C SDK neither reads nor writes the handedness registry glove_sets.yaml (the Python SDK's register / set_name have
+ * no counterpart in C). Gloves whose handedness cannot be determined (not registered in firmware, and serial numbers
+ * duplicated / without handedness) can only be addressed by port / unit_id; handedness can only be registered with the
+ * firmware's companion production test tool.
  *
- * 第一期不含：编码器零位标定写入、腕部相机、MCAP 录制、固件升级、doctor、
- * 基站标定流程。tracker（只读已存标定 + 位姿流）单独成节，见文末。
+ * Not in this version: writing encoder zero calibration, wrist cameras, MCAP recording, firmware updates, doctor, and
+ * the base station calibration workflow. The tracker (read-only stored calibration + pose stream) has its own section
+ * at the end.
  */
 #ifndef REVOHUMAN_H
 #define REVOHUMAN_H
@@ -79,58 +101,61 @@ extern "C" {
 #  define RH_API
 #endif
 
-/* 出参结构的初始化：`RhGloveStats st = RH_STRUCT_INIT(RhGloveStats);`（其余字段清零）。
- * C 用指定初始化器、C++ 用值初始化，都不会触发 -Wmissing-field-initializers。 */
+/* Initializer for output structs: `RhGloveStats st = RH_STRUCT_INIT(RhGloveStats);` (all other fields zeroed).
+ * C uses a designated initializer and C++ uses value-initialization; neither triggers -Wmissing-field-initializers. */
 #ifdef __cplusplus
 #  define RH_STRUCT_INIT(T) ([]() { T rh_v_{}; rh_v_.struct_size = (uint32_t)sizeof(T); return rh_v_; }())
 #else
 #  define RH_STRUCT_INIT(T) { .struct_size = (uint32_t)sizeof(T) }
 #endif
 
-/* ───────────────────────────── 版本 ───────────────────────────── */
+/* ───────────────────────────── Version ───────────────────────────── */
 
 #define RH_API_VERSION_MAJOR 0
 #define RH_API_VERSION_MINOR 1
 #define RH_API_VERSION_PATCH 3
 
-/* ───────────────────────────── 常量 ───────────────────────────── */
+/* ───────────────────────────── Constants ───────────────────────────── */
 
-#define RH_JOINT_COUNT            21   /* 每手编码器关节数，顺序同 Python joint_map */
-#define RH_TACTILE_MAX_POINTS     350  /* 协议允许的触觉点数上限（0 与 351 拒收） */
+#define RH_JOINT_COUNT            21   /* encoder joints per hand, same order as Python joint_map */
+#define RH_TACTILE_MAX_POINTS     350  /* upper bound on tactile points allowed by the protocol (0 and 351 are rejected) */
 #define RH_TACTILE_POINTS_TYPE_A  211
 #define RH_TACTILE_POINTS_TYPE_B  241
 #define RH_STREAM_MIN_RATE_HZ     0.01
 #define RH_STREAM_MAX_RATE_HZ     200.0
 
 #define RH_PATH_MAX    256
-#define RH_ID_MAX      64   /* 拓扑指纹、型号码、组名等 */
+#define RH_ID_MAX      64   /* topology fingerprints, model codes, group names, etc. */
 #define RH_SERIAL_MAX  32
 #define RH_NOTE_MAX    256
 
-/* ───────────────────────────── 状态码 ───────────────────────────── */
+/* ───────────────────────────── Status codes ───────────────────────────── */
 
 typedef int32_t RhStatus;
 enum {
     RH_OK                   = 0,
-    RH_ERR_INVALID_ARG      = -1,   /* 参数非法；此时一个请求字节都没发，码为 1000 */
+    RH_ERR_INVALID_ARG      = -1,   /* invalid argument; not a single request byte has been sent; the code is 1000 */
     RH_ERR_NOT_INITIALIZED  = -2,
-    RH_ERR_NOT_FOUND        = -3,   /* 没找到符合条件的设备 */
+    RH_ERR_NOT_FOUND        = -3,   /* no device matches the criteria */
     RH_ERR_TIMEOUT          = -4,
-    RH_ERR_PROTOCOL         = -5,   /* 线协议错误、设备异常应答、固件不兼容 */
+    RH_ERR_PROTOCOL         = -5,   /* wire protocol error, device exception response, incompatible firmware */
     RH_ERR_DISCONNECTED     = -6,
     RH_ERR_BUFFER_TOO_SMALL = -7,
-    RH_ERR_UNSUPPORTED      = -8,   /* 固件 / 型号 / 本期 C SDK 不支持 */
+    RH_ERR_UNSUPPORTED      = -8,   /* not supported by the firmware / model / this version of the C SDK */
     RH_ERR_CANCELLED        = -9,
-    RH_ERR_INVALID_DATA     = -10,  /* 配置 / 规则文件内容非法 */
-    RH_ERR_BUSY             = -11,  /* 串口或 tracker 被别的进程占着；广播 socket 已有活的监听者 */
-    RH_ERR_STATE            = -12,  /* 当前状态下不能做（已关闭、录制门关、同步已失去、证据不足…） */
-    RH_ERR_CONFLICT         = -13,  /* 速率冲突、型号与声明不符、固件登记的手别与序列号相反 */
-    RH_ERR_IO               = -14,  /* 串口 / 文件 / socket 读写失败 */
+    RH_ERR_INVALID_DATA     = -10,  /* invalid content in a configuration / rules file */
+    RH_ERR_BUSY             = -11,  /* serial port or tracker held by another process; broadcast socket already has a live listener */
+    RH_ERR_STATE            = -12,  /* not possible in the current state (closed, capture gate closed, sync lost, insufficient
+                                       evidence…) */
+    RH_ERR_CONFLICT         = -13,  /* rate conflict, model differs from the declaration, registered handedness contradicts the serial
+                                       number */
+    RH_ERR_IO               = -14,  /* serial port / file / socket read or write failed */
     RH_ERR_INTERNAL         = -99,
 };
 
-/* 与 Python `revohuman.ErrorCode` 逐值相同；`rh_last_error_code()` 返回其一。
- * 不在 RevoHuman 异常树上的原因（含参数非法、广播 socket 错误）一律 1000，不回 0。 */
+/* Identical in value to Python's `revohuman.ErrorCode`; `rh_last_error_code()` returns one of these.
+ * Causes outside the RevoHuman exception tree (including invalid arguments and broadcast socket errors) are always
+ * 1000, never 0. */
 typedef int32_t RhErrorCode;
 enum {
     RH_E_OK                      = 0,
@@ -139,10 +164,10 @@ enum {
     RH_E_DISCONNECTED            = 1101,
     RH_E_PORT_BUSY               = 1102,
     RH_E_PROTOCOL_ERROR          = 1200,
-    RH_E_DEVICE_EXCEPTION        = 1201,  /* 手套应答异常 */
+    RH_E_DEVICE_EXCEPTION        = 1201,  /* the glove returned an exception response */
     RH_E_UNSUPPORTED_FEATURE     = 1202,
-    RH_E_TIME_SYNC_UNSUPPORTED   = 1203,  /* 固件不支持时间同步功能 */
-    RH_E_TIME_SYNC_INCOMPATIBLE  = 1204,  /* 固件的时间同步功能版本不兼容 */
+    RH_E_TIME_SYNC_UNSUPPORTED   = 1203,  /* the firmware does not support time synchronization */
+    RH_E_TIME_SYNC_INCOMPATIBLE  = 1204,  /* the firmware's time synchronization version is incompatible */
     RH_E_FIRMWARE_INCOMPATIBLE   = 1205,
     RH_E_CALIBRATION_ERROR       = 1300,
     RH_E_UNREGISTERED_GLOVE      = 1400,
@@ -163,15 +188,15 @@ enum {
     RH_E_GEOMETRY_LOST           = 1906,
 };
 
-/* ───────────────────────────── 枚举与位图 ───────────────────────────── */
+/* ───────────────────────────── Enums and bitmasks ───────────────────────────── */
 
-typedef int32_t RhHand;             /* Python handedness；None ↔ UNKNOWN */
+typedef int32_t RhHand;             /* Python handedness; None ↔ UNKNOWN */
 enum { RH_HAND_UNKNOWN = 0, RH_HAND_LEFT = 1, RH_HAND_RIGHT = 2 };
 
 typedef int32_t RhHands;            /* open_kit(hands=…) */
 enum { RH_HANDS_BOTH = 0, RH_HANDS_LEFT = 1, RH_HANDS_RIGHT = 2 };
 
-/* 传感器位图：ProductVariant.sensors / HandReport.sensors / open_kit(sensors=…) */
+/* Sensor bitmask: ProductVariant.sensors / HandReport.sensors / open_kit(sensors=…) */
 typedef uint32_t RhSensorMask;
 enum {
     RH_SENSOR_ENCODER      = 1u << 0,
@@ -183,18 +208,21 @@ enum {
 typedef int32_t RhTactileState;     /* variant.TactileState */
 enum { RH_TACTILE_STATE_UNKNOWN = 0, RH_TACTILE_STATE_NONE = 1, RH_TACTILE_STATE_TACTILE = 2 };
 
-typedef int32_t RhTactileUnit;      /* 触觉值能不能当力用：TYPE_B 且 241 点为 NEWTON（标定过的力值，用 rh_tactile_newtons
-                                       取牛顿），其余 DEVICE_NATIVE（原始计数，不是力） */
+typedef int32_t RhTactileUnit;      /* whether tactile values can be used as force: NEWTON for TYPE_B with 241 points (calibrated force
+                                       values; use rh_tactile_newtons to get newtons), otherwise DEVICE_NATIVE (raw counts, not
+                                       force) */
 enum { RH_TACTILE_UNIT_DEVICE_NATIVE = 0, RH_TACTILE_UNIT_NEWTON = 1 };
 
-typedef int32_t RhTactileTransport; /* Python Glove.tactile_transport：当前流的触觉走哪条路 */
+typedef int32_t RhTactileTransport; /* Python Glove.tactile_transport: which path the current stream's tactile data takes */
 enum {
-    RH_TACTILE_TRANSPORT_NONE     = 0,  /* C 扩展：型号不带触觉（Python 此时也报 combined） */
-    RH_TACTILE_TRANSPORT_COMBINED = 1,  /* 组合帧（每个编码器帧带模块最近一个样本；没请求分包、固件不支持或还没起流） */
-    RH_TACTILE_TRANSPORT_SPLIT    = 2,  /* 分包（每个模块样本单独一个包，经 rh_glove_tactile_subscribe 逐个交出） */
+    RH_TACTILE_TRANSPORT_NONE     = 0,  /* C extension: the model has no tactile (Python reports combined here) */
+    RH_TACTILE_TRANSPORT_COMBINED = 1,  /* combined frames (each encoder frame carries the module's latest sample; split not requested,
+                                           not supported by the firmware, or the stream has not started yet) */
+    RH_TACTILE_TRANSPORT_SPLIT    = 2,  /* split packets (each module sample in its own packet, delivered one by one via
+                                           rh_glove_tactile_subscribe) */
 };
 
-typedef int32_t RhSyncCause;        /* notices.SyncCause；门开着时为 NONE */
+typedef int32_t RhSyncCause;        /* notices.SyncCause; NONE while the gate is open */
 enum {
     RH_CAUSE_NONE             = 0,
     RH_CAUSE_CLOCK_NOT_READY  = 1,
@@ -204,68 +232,73 @@ enum {
     RH_CAUSE_LINK_UNSTABLE    = 5,
 };
 
-/* codes.TrustState；NONE = 映射器尚无结论。DEGRADED = 精度略降但仍在允许范围内，照常出数据；
- * JSON（rh_glove_stats_json / rh_kit_status_json）里的取值串与 Python 相同。 */
+/* codes.TrustState; NONE = the time mapping has no verdict yet. DEGRADED = accuracy slightly reduced but still within
+ * the allowed range; data is delivered as usual. The value strings in JSON (rh_glove_stats_json / rh_kit_status_json)
+ * are the same as in Python. */
 typedef int32_t RhStampTrust;
 enum { RH_TRUST_NONE = 0, RH_TRUST_TRUSTED = 1, RH_TRUST_DEGRADED = 2, RH_TRUST_UNTRUSTED = 3 };
 
-/* button.ButtonMode。0 保留为「未知」，零初始化的结构不会被误读成 END。
- * 设备上报的原值是 END=0 / START=1，库内显式映射，不做数值强转。 */
+/* button.ButtonMode. 0 is reserved for "unknown", so a zero-initialized struct is never misread as END.
+ * The device reports END=0 / START=1; the library maps them explicitly instead of casting the value. */
 typedef int32_t RhButtonMode;
 enum { RH_BUTTON_UNKNOWN = 0, RH_BUTTON_START = 1, RH_BUTTON_END = 2 };
 
 typedef int32_t RhPairMode;         /* BimanualSynchronizer(mode=…) */
 enum { RH_PAIR_INTERPOLATE = 0, RH_PAIR_NEAREST = 1 };
 
-typedef int32_t RhSyncPolicy;       /* connect_pair(sync=…) / open_kit(sync=…)：False / True / "best-effort" */
+typedef int32_t RhSyncPolicy;       /* connect_pair(sync=…) / open_kit(sync=…): False / True / "best-effort" */
 enum { RH_SYNC_OFF = 0, RH_SYNC_ON = 1, RH_SYNC_BEST_EFFORT = 2 };
-/* 双手连接时做一次硬件同步（两只手套对齐到同一个 USB 帧，加入同一个同步会话）：
- *   RH_SYNC_ON（默认）：同步失败 → rh_pair_connect / rh_kit_open 返回错误；
- *   RH_SYNC_BEST_EFFORT：同步失败 → 告警 N2201 后退到主机时间域配对；
- *   RH_SYNC_OFF：不做硬件同步，主机时间域配对。
- * 起流后自检同步质量（结果见 rh_pair_connect_report），采样对齐超 resync_ms 时连接期内重建；
- * 运行中失步（N2202）后按 auto_resync 自动重建，也可手动 rh_pair_resync()。 */
+/* Hardware sync done once when both hands connect (the two gloves are aligned to the same USB frame and join the same
+ * sync session):
+ *   RH_SYNC_ON (default): sync failure → rh_pair_connect / rh_kit_open returns an error;
+ *   RH_SYNC_BEST_EFFORT: when sync succeeds, the same as ON (both hands aligned to the same USB frame);
+ *     sync failure → warning N2201, then fall back to pairing in the host time domain;
+ *   RH_SYNC_OFF: no hardware sync; pairing in the host time domain.
+ * After the stream starts, sync quality is self-checked (results in rh_pair_connect_report); if sample alignment exceeds
+ * resync_ms, sync is rebuilt while connecting. When sync is lost at runtime (N2202) it is rebuilt automatically according
+ * to auto_resync, or manually with rh_pair_resync(). */
 
-typedef int32_t RhProductSource;    /* ProductIdentity.source；NONE 在广播里写 "" */
+typedef int32_t RhProductSource;    /* ProductIdentity.source; NONE is written as "" in the broadcast */
 enum {
     RH_PRODUCT_SOURCE_NONE     = 0,
-    RH_PRODUCT_SOURCE_SN       = 1,  /* "sn"：序列号规则 */
-    RH_PRODUCT_SOURCE_HARDWARE = 2,  /* "hardware"：硬件证据 */
-    RH_PRODUCT_SOURCE_DECLARED = 3,  /* "declared"：调用方声明 */
+    RH_PRODUCT_SOURCE_SN       = 1,  /* "sn": serial number rules */
+    RH_PRODUCT_SOURCE_HARDWARE = 2,  /* "hardware": hardware evidence */
+    RH_PRODUCT_SOURCE_DECLARED = 3,  /* "declared": declared by the caller */
 };
 
-typedef int32_t RhFrameKind;        /* 订阅回调的 kind */
+typedef int32_t RhFrameKind;        /* kind passed to subscription callbacks */
 enum {
-    RH_FRAME_OK    = 0,  /* frame 有效 */
-    RH_FRAME_LAG   = 1,  /* 队列溢出丢了最旧的帧；frame 为 NULL，丢弃数见 rh_sub_dropped() */
-    RH_FRAME_END   = 2,  /* 上游关闭，订阅结束；frame 为 NULL，之后不再回调 */
-    RH_FRAME_ERROR = 3,  /* 上游致命错误；frame 为 NULL，回调线程内 rh_last_error*() 可读细节；之后不再回调 */
+    RH_FRAME_OK    = 0,  /* frame is valid */
+    RH_FRAME_LAG   = 1,  /* the queue overflowed and the oldest frames were dropped; frame is NULL, drop count in rh_sub_dropped() */
+    RH_FRAME_END   = 2,  /* upstream closed, the subscription has ended; frame is NULL; no further callbacks */
+    RH_FRAME_ERROR = 3,  /* upstream fatal error; frame is NULL; rh_last_error*() on the callback thread gives the details; no further
+                            callbacks */
 };
 
 /* RhGloveFrame.flags */
 typedef uint32_t RhFrameFlags;
 enum {
-    RH_FRAME_FLAG_GATE_OPEN       = 1u << 0,  /* 派发时录制门开着（门控订阅只收到这种） */
-    RH_FRAME_FLAG_HAS_SAMPLE_TIME = 1u << 1,  /* 0 = sample_*_ns 无效（只会出现在免门订阅）。
-                                                 广播是免门订阅，此时 glove 的 sample_ns 发 null */
-    RH_FRAME_FLAG_HAS_TACTILE     = 1u << 2,  /* 0 = 本手型号不带触觉或这一帧没有触觉 */
+    RH_FRAME_FLAG_GATE_OPEN       = 1u << 0,  /* the capture gate was open at dispatch (gated subscriptions receive only these) */
+    RH_FRAME_FLAG_HAS_SAMPLE_TIME = 1u << 1,  /* 0 = sample_*_ns invalid (occurs only on ungated subscriptions).
+                                                 The broadcast is an ungated subscription; glove sample_ns is then sent as null */
+    RH_FRAME_FLAG_HAS_TACTILE     = 1u << 2,  /* 0 = this hand's model has no tactile, or this frame has no tactile data */
 };
 
-/* RhSyncStamp.flags：帧内同步段的标志位原值，16 位，未知位原样保留。
- * 注意与按键扩展段的 8 位 flags 不是一回事，不共用类型。 */
+/* RhSyncStamp.flags: raw value of the flag bits in the in-frame sync section, 16 bits; unknown bits are kept as-is.
+ * Note that this is not the same thing as the 8-bit flags of the button extension section; they do not share a type. */
 typedef uint16_t RhSyncFlags;
 enum {
-    RH_SYNC_FLAG_BUS_CLOCK   = 0x01,  /* 设备看得到主机 USB 帧时钟 */
-    RH_SYNC_FLAG_BUS_LOCKED  = 0x02,  /* 采样时钟已跟上主机 USB 帧时钟 */
-    RH_SYNC_FLAG_IN_SESSION  = 0x04,  /* 已加入双手同步会话 */
-    RH_SYNC_FLAG_HOLD        = 0x08,  /* 暂时跟丢 USB 帧时钟，按最近的速率保持 */
-    RH_SYNC_FLAG_STAMP_VALID = 0x10,  /* 本帧的同步戳有效 */
+    RH_SYNC_FLAG_BUS_CLOCK   = 0x01,  /* the device sees the host USB frame clock */
+    RH_SYNC_FLAG_BUS_LOCKED  = 0x02,  /* the sampling clock is following the host USB frame clock */
+    RH_SYNC_FLAG_IN_SESSION  = 0x04,  /* joined a two-hand sync session */
+    RH_SYNC_FLAG_HOLD        = 0x08,  /* temporarily lost the USB frame clock, holding the most recent rate */
+    RH_SYNC_FLAG_STAMP_VALID = 0x10,  /* this frame's sync stamp is valid */
 };
 
 typedef int32_t RhLogLevel;
 enum { RH_LOG_DEBUG = 10, RH_LOG_INFO = 20, RH_LOG_WARNING = 30, RH_LOG_ERROR = 40, RH_LOG_OFF = 100 };
 
-/* ───────────────────────────── 不透明句柄 ───────────────────────────── */
+/* ───────────────────────────── Opaque handles ───────────────────────────── */
 
 typedef struct RhScanList     RhScanList;
 typedef struct RhGlove        RhGlove;
@@ -277,104 +310,115 @@ typedef struct RhAutoKit      RhAutoKit;
 typedef struct RhLiveServer   RhLiveServer;
 typedef struct RhTracker      RhTracker;
 
-/* ───────────────────────────── 生命周期与错误 ───────────────────────────── */
+/* ───────────────────────────── Lifecycle and errors ───────────────────────────── */
 
 typedef struct RhInitOptions {
     uint32_t   struct_size;
-    RhLogLevel log_level;            /* 默认 RH_LOG_WARNING */
+    RhLogLevel log_level;            /* default RH_LOG_WARNING */
 } RhInitOptions;
 
 RH_API void        rh_init_options_init(RhInitOptions *opts);
-RH_API RhStatus    rh_init(const RhInitOptions *opts);   /* 幂等 */
-RH_API void        rh_shutdown(void);                    /* 未释放的句柄会被强制关闭并告警 */
-RH_API const char *rh_version(void);                     /* 静态串，如 "0.1.3" */
+RH_API RhStatus    rh_init(const RhInitOptions *opts);   /* idempotent */
+RH_API void        rh_shutdown(void);                    /* unreleased handles are force-closed with a warning */
+RH_API const char *rh_version(void);                     /* static string, e.g. "0.1.3" */
 
-/* 上一个错误的 E 码（与 Python error_code() 同规则）。 */
+/* E code of the last error (same rules as Python error_code()). */
 RH_API RhErrorCode rh_last_error_code(void);
-/* "E1200 StreamOptionsRejected: …"：类名段是**实际**的异常类名，可能是没有专属码的子类
- * （StreamOptionsRejected、ButtonExtensionMismatch、LiveSocketBusy …），与 Python type(exc).__name__ 相同。 */
+/* "E1200 StreamOptionsRejected: …": the class-name part is the **actual** exception class name, which may be a subclass
+ * without its own code (StreamOptionsRejected, ButtonExtensionMismatch, LiveSocketBusy …), same as Python
+ * type(exc).__name__. */
 RH_API int32_t     rh_last_error(char *buf, size_t buf_len);
-/* 上一个错误是手套应答异常（E1201）时返回设备回的异常码（0x01 非法功能、0x02 非法地址…），
- * 否则返回 0。 */
+/* If the last error was a glove exception response (E1201), returns the exception code the device sent back
+ * (0x01 illegal function, 0x02 illegal address…); otherwise returns 0. */
 RH_API int32_t     rh_last_error_exception_code(void);
-/* 按码查表得到**该码的根类名**（1200 → "ProtocolError"，未知码返回 NULL）。
- * 它给不出子类名：要看实际异常类，读 rh_last_error()。 */
+/* Looks up **the root class name of the code** (1200 → "ProtocolError"; unknown codes return NULL).
+ * It cannot give subclass names: to see the actual exception class, read rh_last_error(). */
 RH_API const char *rh_error_class_name(RhErrorCode code);
 
 typedef void (*RhLogCallback)(RhLogLevel level, const char *message, void *user_data);
 RH_API void rh_set_log_level(RhLogLevel level);
-/* 默认写 stderr；设回调后只走回调，传 NULL 恢复写 stderr。回调可能来自任意内部线程。
- * 回调在库内一把非递归锁里调用，各线程的日志依次进回调：回调要快，且不得在回调里调用本函数
- * 或其他会写日志的 rh_* 函数（会死锁）。本函数返回时旧回调已不在执行中，此后也不会再被调用，
- * 它的 user_data 即可释放。 */
+/* Writes to stderr by default; once a callback is set, logs go only to the callback; pass NULL to go back to stderr.
+ * The callback may come from any internal thread. It is called under a non-recursive lock inside the library, so log
+ * lines from all threads enter the callback one at a time: keep the callback fast, and do not call this function or any
+ * other rh_* function that writes logs from inside it (deadlock). When this function returns, the old callback is no
+ * longer running and will never be called again, so its user_data can be freed. */
 RH_API void rh_set_log_callback(RhLogCallback cb, void *user_data);
 
-/* ───────────────────────────── 时间 ───────────────────────────── */
+/* ───────────────────────────── Time ───────────────────────────── */
 
-/* 进程级偏移：wall = mono + offset（夹心采样，主机改时 / 时间同步步进后刷新）。 */
+/* Process-wide offset: wall = mono + offset (measured by bracketing clock reads; refreshed after host clock changes /
+ * time-sync steps). */
 RH_API int64_t rh_wall_offset_ns(void);
 
-/* ───────────────────────────── 帧结构 ───────────────────────────── */
+/* ───────────────────────────── Frame structs ───────────────────────────── */
 
-/* 帧内同步段（Python SyncStamp）。
- * 配对键 (generation, cycle_sequence) 以 in_session 为准：in_session 时有效，hold 期间仍有效；
- * 「键有效、未同步」是 hold 下的正常态。不要拿 synchronized 当键是否有效的判据。 */
+/* In-frame sync section (Python SyncStamp).
+ * The pairing key (generation, cycle_sequence) is governed by in_session: it is valid while in_session, and still
+ * valid during hold; "key valid, not synchronized" is the normal state under hold. Do not use synchronized to decide
+ * whether the key is valid. */
 typedef struct RhSyncStamp {
-    uint8_t     present;          /* 帧带同步段；0 = 设备漏发（Python sync is None），属协议异常 */
-    uint8_t     in_session;       /* generation≠0 且 IN_SESSION */
-    uint8_t     synchronized;     /* generation≠0 且 BUS_CLOCK|BUS_LOCKED|IN_SESSION|STAMP_VALID 全置且非 HOLD */
-    uint8_t     hold;             /* HOLD 位：区分「会话中暂时跟丢时钟」与「从未加入会话」 */
-    uint8_t     bus_locked;       /* BUS_LOCKED 且非 HOLD（没加入会话的手套也可能为 1） */
+    uint8_t     present;          /* the frame carries a sync section; 0 = the device omitted it (Python sync is None), a protocol
+                                     anomaly */
+    uint8_t     in_session;       /* generation≠0 and IN_SESSION */
+    uint8_t     synchronized;     /* generation≠0, BUS_CLOCK|BUS_LOCKED|IN_SESSION|STAMP_VALID all set, and not HOLD */
+    uint8_t     hold;             /* HOLD bit: tells "temporarily lost the clock within a session" from "never joined a session" */
+    uint8_t     bus_locked;       /* BUS_LOCKED and not HOLD (can be 1 even on gloves that have not joined a session) */
     uint8_t     _reserved;
-    RhSyncFlags flags;            /* 原值，未知位保留 */
-    uint32_t    generation;       /* 同步会话代号；0 = 从未加入会话 */
+    RhSyncFlags flags;            /* raw value; unknown bits kept */
+    uint32_t    generation;       /* sync session generation; 0 = never joined a session */
     uint32_t    cycle_sequence;
-    uint16_t    frame_number;     /* 采样时刻的 USB 帧号，mod 2048 */
+    uint16_t    frame_number;     /* USB frame number at the sampling instant, mod 2048 */
     uint16_t    _reserved2;
 } RhSyncStamp;
 
-/* Python TactileData。values 只有前 point_count 个有效，是固件原值：unit == NEWTON 时用 rh_tactile_newtons 换成牛顿，
- * 不要直接当力用；DEVICE_NATIVE 时是原始计数，不是力。 */
+/* Python TactileData. Only the first point_count entries of values are valid, and they are raw firmware values: when
+ * unit == NEWTON, convert them to newtons with rh_tactile_newtons rather than using them directly as force; when
+ * DEVICE_NATIVE, they are raw counts, not force. */
 typedef struct RhTactile {
     uint16_t      point_count;
     uint16_t      age_ms;
     uint8_t       valid;
     uint8_t       link_ok;
-    uint8_t       calibrated;          /* unit == NEWTON 时为 1；TYPE_A 恒 0 */
-    uint8_t       has_sample_time;     /* 0 = sample_*_ns 无效（映射未就绪）；与帧级标志无关 */
+    uint8_t       calibrated;          /* 1 when unit == NEWTON; always 0 for TYPE_A */
+    uint8_t       has_sample_time;     /* 0 = sample_*_ns invalid (mapping not ready); independent of the frame-level flag */
     RhTactileUnit unit;
-    uint32_t      device_tick;         /* 触觉自己的采样 tick（ms）；实时流恒有 */
-    int64_t       sample_wall_ns;      /* 触觉自己的采样刻；跨模态毫秒级分析用它，不用帧的 */
+    uint32_t      device_tick;         /* the tactile data's own sampling tick (ms); always present in live streams */
+    int64_t       sample_wall_ns;      /* the tactile data's own sampling instant; use this, not the frame's, for millisecond-level
+                                          cross-modal analysis */
     int64_t       sample_mono_ns;
     uint16_t      values[RH_TACTILE_MAX_POINTS];
 } RhTactile;
 
-/* Python GloveFrame。 */
+/* Python GloveFrame. */
 typedef struct RhGloveFrame {
     uint32_t     struct_size;
-    RhHand       hand;                    /* 裸连时 UNKNOWN */
-    uint64_t     seq;                     /* C 扩展：会话内按有符号差展开（设备倒退则随之倒退，不保证单调）；低 32 位 = Python seq（线上 u32 原值） */
-    uint32_t     generation;              /* 每次（重）起流 +1；变了 = 重连过或做过维护窗 */
+    RhHand       hand;                    /* UNKNOWN when connected without a hand */
+    uint64_t     seq;                     /* C extension: unwrapped within a session by signed difference (goes backwards if the device
+                                             does, so not guaranteed monotonic); low 32 bits = Python seq (the raw u32 on the wire) */
+    uint32_t     generation;              /* +1 on every (re)start of the stream; a change = reconnected or a maintenance window ran */
     RhFrameFlags flags;
-    uint32_t     device_tick;             /* 设备**发送** tick（ms，uint32 回绕） */
-    uint32_t     joints_valid_mask;       /* bit i = joints_deg[i] 有效 */
-    int64_t      recv_wall_ns;            /* 主机收到时刻 */
-    int64_t      sample_wall_ns;          /* 编码器采样刻（门控订阅下恒有效） */
-    int64_t      sample_mono_ns;          /* 同一时刻的 MONOTONIC 表示，与 sample_wall_ns 按同一个偏移一起算出 */
-    uint32_t     skipped_snapshots;       /* 设备侧跳过的快照数（线上原值） */
+    uint32_t     device_tick;             /* device **send** tick (ms, uint32, wraps around) */
+    uint32_t     joints_valid_mask;       /* bit i = joints_deg[i] is valid */
+    int64_t      recv_wall_ns;            /* host receive time */
+    int64_t      sample_wall_ns;          /* encoder sampling instant (always valid on gated subscriptions) */
+    int64_t      sample_mono_ns;          /* the same instant in MONOTONIC, computed together with sample_wall_ns from the same
+                                             offset */
+    uint32_t     skipped_snapshots;       /* snapshots skipped on the device side (raw wire value) */
     uint32_t     _reserved0;
-    uint64_t     dropped_local;           /* **流级**累计的主机侧丢弃数；订阅级见 rh_sub_dropped() */
-    double       joints_deg[RH_JOINT_COUNT]; /* 固件修正角（度），不做映射；映射见 rh_joints_to_radians */
+    uint64_t     dropped_local;           /* host-side drops accumulated **per stream**; per subscription see rh_sub_dropped() */
+    double       joints_deg[RH_JOINT_COUNT]; /* firmware-corrected angles (degrees), unmapped; for mapping see rh_joints_to_radians */
     RhSyncStamp  sync;
-    RhTactile    tactile;                 /* flags & HAS_TACTILE 时有效 */
+    RhTactile    tactile;                 /* valid when flags & HAS_TACTILE */
     uint64_t     _reserved_tail[4];
 } RhGloveFrame;
 
-/* Python PairedFrame。以左手为参考轴：
- *   skew_ns = 左帧时刻到最近一个**真实**右采样的带符号距离（右晚为正）；
- *             插值合成的右帧不算采样点，所以 interpolate 档下它≠ right.sample_wall_ns − left.sample_wall_ns。
- *             按 (generation, cycle_sequence) 精确配上的对子恒 0。
- *   interpolate 档合成右帧的 sample_mono_ns 由 C 定义（Python 帧无此字段），不在黄金向量覆盖内。 */
+/* Python PairedFrame. The left hand is the reference axis:
+ *   skew_ns = signed distance from the left frame's instant to the nearest **real** right sample (positive when the right
+ *             is later); an interpolated right frame is not a sample, so in interpolate mode it ≠
+ *             right.sample_wall_ns − left.sample_wall_ns. Pairs matched exactly by (generation, cycle_sequence) are
+ *             always 0.
+ *   In interpolate mode the sample_mono_ns of a synthesized right frame is defined by C (Python frames have no such
+ *   field) and is not covered by the golden vectors. */
 typedef struct RhPairedFrame {
     uint32_t     struct_size;
     uint32_t     _reserved;
@@ -383,35 +427,43 @@ typedef struct RhPairedFrame {
     RhGloveFrame right;
 } RhPairedFrame;
 
-/* Python TactileSample：分包会话（RhGloveOptions.split_tactile = 1 且固件支持）里的一个触觉样本，
- * 固件每提交一个模块样本发一个包，经 rh_glove_tactile_subscribe 逐个交出。
- * 时间戳语义与帧上的触觉不同：tactile.device_tick 取「完整样本最后一个 UART 字节收完」的估计，
- * 通常早于组合帧里的触觉 tick 几毫秒；两种模式录的数据不要混在一起比。
- * tactile.valid = 0 的是只报健康的包（固件无效期间约 100ms 一个），point_count 可能为 0。 */
+/* Python TactileSample: one tactile sample in a split session (RhGloveOptions.split_tactile = 1 and supported by the
+ * firmware). The firmware sends one packet for each module sample it commits; they are delivered one by one via
+ * rh_glove_tactile_subscribe.
+ * The timestamp semantics differ from the tactile data on frames: tactile.device_tick is an estimate of when "the last
+ * UART byte of the complete sample was received", usually a few milliseconds earlier than the tactile tick in combined
+ * frames; do not compare data recorded in the two modes with each other.
+ * tactile.valid = 0 marks a health-only packet (about one every 100 ms while the firmware data is invalid); point_count
+ * may be 0. */
 typedef struct RhTactileSample {
     uint32_t  struct_size;
-    RhHand    hand;                      /* 裸连时 UNKNOWN */
-    uint32_t  generation;                /* 与 RhGloveFrame.generation 同口径 */
-    uint32_t  packet_seq;                /* 包序号（含只报健康的包，逐包 +1） */
-    uint32_t  tactile_seq;               /* 触觉样本序号（只报健康的包不推进） */
-    uint32_t  cycle_sequence;            /* 收到该模块样本时所在的编码器周期号（与 RhSyncStamp.cycle_sequence 同一计数） */
-    uint16_t  frame_number;              /* 收到模块样本时的 USB 帧号，mod 2048（与 RhSyncStamp.frame_number 同一计数）；frame_stamp_valid = 0 时为 0、不可用 */
-    uint16_t  frame_elapsed_us;          /* 距该 USB 帧起点的微秒数；同上 */
+    RhHand    hand;                      /* UNKNOWN when connected without a hand */
+    uint32_t  generation;                /* same meaning as RhGloveFrame.generation */
+    uint32_t  packet_seq;                /* packet sequence number (counts health-only packets too, +1 per packet) */
+    uint32_t  tactile_seq;               /* tactile sample sequence number (health-only packets do not advance it) */
+    uint32_t  cycle_sequence;            /* encoder cycle number when the module sample was received (same counter as
+                                            RhSyncStamp.cycle_sequence) */
+    uint16_t  frame_number;              /* USB frame number when the module sample was received, mod 2048 (same counter as
+                                            RhSyncStamp.frame_number); 0 and unusable when frame_stamp_valid = 0 */
+    uint16_t  frame_elapsed_us;          /* microseconds since the start of that USB frame; same as above */
     uint8_t   frame_stamp_valid;
-    uint8_t   overflow;                  /* 上一包之后设备队列溢出过 */
-    uint8_t   gate_open;                 /* 0 = 录制门关着时派给免门订阅的样本（只能看，不能拿来对齐） */
+    uint8_t   overflow;                  /* the device queue overflowed since the previous packet */
+    uint8_t   gate_open;                 /* 0 = a sample delivered to an ungated subscription while the capture gate was closed (for
+                                            viewing only, not for alignment) */
     uint8_t   _reserved0;
-    uint32_t  dropped_samples;           /* 本次起流以来设备队列溢出丢掉的样本（累计，重连后从 0 数） */
+    uint32_t  dropped_samples;           /* samples lost to device queue overflows since this stream started (cumulative, counts from 0
+                                            again after a reconnect) */
     uint32_t  _reserved1;
-    int64_t   recv_wall_ns;              /* 主机收到该包的时刻（不是采样时刻） */
-    RhTactile tactile;                   /* 采样时刻见 tactile.sample_*_ns（has_sample_time） */
+    int64_t   recv_wall_ns;              /* host receive time of the packet (not the sampling instant) */
+    RhTactile tactile;                   /* sampling instant in tactile.sample_*_ns (has_sample_time) */
     uint64_t  _reserved_tail[4];
 } RhTactileSample;
 
-/* 触觉力值，单位牛顿（N）：unit == RH_TACTILE_UNIT_NEWTON 时把前 point_count 个点换算后写进 out[0..point_count)。
- * 不看 valid / link_ok，这一帧用不用由调用方定。unit == DEVICE_NATIVE（原始计数，不是力）→ RH_ERR_UNSUPPORTED；
- * tactile / out 为 NULL、out_len < point_count、point_count > RH_TACTILE_MAX_POINTS → RH_ERR_INVALID_ARG。
- * 失败不写 out。纯函数，任意线程可调。 */
+/* Tactile force in newtons (N): when unit == RH_TACTILE_UNIT_NEWTON, converts the first point_count points and writes them
+ * to out[0..point_count). Does not look at valid / link_ok; whether to use the frame is up to the caller.
+ * unit == DEVICE_NATIVE (raw counts, not force) → RH_ERR_UNSUPPORTED;
+ * tactile / out is NULL, out_len < point_count, or point_count > RH_TACTILE_MAX_POINTS → RH_ERR_INVALID_ARG.
+ * out is not written on failure. Pure function, callable from any thread. */
 RH_API RhStatus rh_tactile_newtons(const RhTactile *tactile, float *out, size_t out_len);
 
 typedef struct RhButtonState {
@@ -423,21 +475,21 @@ typedef struct RhButtonState {
     uint32_t     press_sequence;
     uint32_t     generation;
     uint32_t     _reserved2;
-    uint64_t     seq;                    /* 同 RhGloveFrame.seq：C 扩展，低 32 位 = Python seq */
+    uint64_t     seq;                    /* same as RhGloveFrame.seq: C extension, low 32 bits = Python seq */
     int64_t      recv_wall_ns;
     int64_t      sample_wall_ns;
 } RhButtonState;
 
-/* Python ButtonEvent；漏看的按压数 = press_count − 1。 */
+/* Python ButtonEvent; number of missed presses = press_count − 1. */
 typedef struct RhButtonEvent {
     uint32_t     struct_size;
-    RhButtonMode mode;                   /* 按压之后的状态：START = 开始录制，END = 停止 */
+    RhButtonMode mode;                   /* state after the press: START = start recording, END = stop */
     uint32_t     press_sequence;
     uint32_t     press_count;
     uint32_t     generation;
     uint8_t      has_sample_time;
     uint8_t      _reserved[3];
-    uint64_t     seq;                    /* 同 RhGloveFrame.seq */
+    uint64_t     seq;                    /* same as RhGloveFrame.seq */
     int64_t      recv_wall_ns;
     int64_t      sample_wall_ns;
 } RhButtonEvent;
@@ -447,16 +499,18 @@ typedef void (*RhPairedFrameCallback)(RhFrameKind kind, const RhPairedFrame *fra
 typedef void (*RhButtonEventCallback)(RhFrameKind kind, const RhButtonEvent *event, void *user_data);
 typedef void (*RhTactileSampleCallback)(RhFrameKind kind, const RhTactileSample *sample, void *user_data);
 
-/* ───────────────────────────── 发现 ───────────────────────────── */
+/* ───────────────────────────── Discovery ───────────────────────────── */
 
-/* Python DiscoveredGlove。probe=0 时 fw_version 及其后字段为空 / 0。 */
+/* Python DiscoveredGlove. With probe=0, fw_version and the fields after it are empty / 0. */
 typedef struct RhDiscoveredGlove {
     uint32_t struct_size;
-    RhHand   hand;                       /* 固件登记的手别 > MCU 序列号；冲突 / 撞号 / 认不出 = UNKNOWN（原因见 hand_note） */
-    char     port[RH_PATH_MAX];          /* 空串 = sysfs 有但节点不可用（不存在 / 重新插拔前的旧节点，约定 9） */
-    char     unit_id[RH_ID_MAX];         /* USB 拓扑指纹，身份主键（Python usb_topology_id） */
-    uint8_t  registered;                 /* 手别已定（= hand 不为 UNKNOWN） */
-    uint8_t  probed;                     /* 1 = 本条确实短连读过设备信息（被占的口为 0） */
+    RhHand   hand;                       /* registered handedness in firmware > MCU serial number; conflicting / duplicated /
+                                            undetermined = UNKNOWN (reason in hand_note) */
+    char     port[RH_PATH_MAX];          /* empty = present in sysfs but the node is unusable (missing / stale node from before a
+                                            replug, convention 9) */
+    char     unit_id[RH_ID_MAX];         /* USB topology fingerprint, the identity key (Python usb_topology_id) */
+    uint8_t  registered;                 /* handedness determined (= hand is not UNKNOWN) */
+    uint8_t  probed;                     /* 1 = this entry really did read device info over a short connection (0 for busy ports) */
     uint8_t  _reserved[2];
     char     usb_serial[RH_SERIAL_MAX];
     char     hand_source[16];            /* register / serial / conflict / none */
@@ -467,16 +521,18 @@ typedef struct RhDiscoveredGlove {
     char     product_type[RH_ID_MAX];    /* UNKNOWN / ENCODER_ONLY / ENCODER_TACTILE */
     uint16_t encoder_count;
     uint16_t tactile_point_count;
-    char     tactile_kind[16];           /* "TYPE_A" / "TYPE_B"；类型未识别或读不到为空 */
+    char     tactile_kind[16];           /* "TYPE_A" / "TYPE_B"; empty if the type is unrecognized or cannot be read */
 } RhDiscoveredGlove;
 
 typedef struct RhScanOptions {
     uint32_t    struct_size;
-    uint8_t     probe;                   /* 默认 0；1 = 短连补齐固件信息，并给还没读过手别登记的单元读一次（写缓存）；
-                                            0 = 固件登记的手别只用缓存里已有的。
-                                            C 偏离：被别的进程占着的口跳过不读、不报错（Python 不做 flock 直接连） */
+    uint8_t     probe;                   /* default 0; 1 = short connection to fill in firmware info, and read the handedness
+                                            registration once for units not read yet (writes the cache);
+                                            0 = registered handedness comes only from what is already in the cache.
+                                            C deviation: ports held by another process are skipped, not read and not reported as errors
+                                            (Python connects directly without flock) */
     uint8_t     _reserved[3];
-    const char *sysfs_root;              /* NULL / "" → /sys/bus/usb/devices（测试用） */
+    const char *sysfs_root;              /* NULL / "" → /sys/bus/usb/devices (for testing) */
 } RhScanOptions;
 
 RH_API void     rh_scan_options_init(RhScanOptions *opts);
@@ -485,12 +541,14 @@ RH_API size_t   rh_scan_count(const RhScanList *list);
 RH_API RhStatus rh_scan_get(const RhScanList *list, size_t index, RhDiscoveredGlove *out);
 RH_API void     rh_scan_free(RhScanList *list);
 
-/* ───────────────────────────── 单手 ───────────────────────────── */
+/* ───────────────────────────── Single glove ───────────────────────────── */
 
-/* 定位方式三选一（hand / port / unit_id），全空 = 全机恰好一只时裸连。
- * hand 按固件登记的手别 > MCU 序列号找：认不出 / 两块撞同一只手 → RH_ERR_NOT_FOUND（E1400），改用 port / unit_id；
- * 某块 MCU 登记的手别与序列号就这只手说法相反 → RH_ERR_CONFLICT。
- * port 按约定 9 先换到 REVOHUMAN_DEV_DIR 下（设了且条件成立时）。 */
+/* Pick one of three ways to locate the glove (hand / port / unit_id); all empty = connect without a hand when there is
+ * exactly one glove on the machine.
+ * hand is looked up by registered handedness in firmware > MCU serial number: undetermined / two gloves claiming the same
+ * hand → RH_ERR_NOT_FOUND (E1400), use port / unit_id instead; an MCU whose registered handedness and serial number
+ * contradict each other about this hand → RH_ERR_CONFLICT.
+ * port is first redirected under REVOHUMAN_DEV_DIR per convention 9 (when it is set and the condition holds). */
 typedef struct RhGloveTarget {
     RhHand      hand;
     const char *port;
@@ -499,65 +557,72 @@ typedef struct RhGloveTarget {
 
 typedef struct RhGloveOptions {
     uint32_t    struct_size;
-    double      rate_hz;                 /* 默认 200；速率属于连接，订阅不能改 */
-    uint8_t     require_tactile;         /* 默认 0；1 = 型号不带或判不出触觉即拒连 */
-    uint8_t     button;                  /* 默认 0；1 = 启用按键上报 */
-    uint8_t     split_tactile;           /* 默认 0；1 = 开流时请求触觉分包（见 rh_glove_tactile_subscribe），
-                                            固件不支持时照常连接、按组合帧走 */
+    double      rate_hz;                 /* default 200; the rate belongs to the connection, subscriptions cannot change it */
+    uint8_t     require_tactile;         /* default 0; 1 = refuse to connect if the model has no tactile or tactile cannot be
+                                            determined */
+    uint8_t     button;                  /* default 0; 1 = enable button reports */
+    uint8_t     split_tactile;           /* default 0; 1 = request split tactile packets when starting the stream (see
+                                            rh_glove_tactile_subscribe); if the firmware does not support it, the connection proceeds
+                                            with combined frames */
     uint8_t     _reserved[1];
-    uint32_t    sync_loss_debounce;      /* C 扩展（Python 固定 5）：默认 5；连续几帧不在当前同步会话代上才判丢；< 1 按 1 */
+    uint32_t    sync_loss_debounce;      /* C extension (fixed at 5 in Python): default 5; number of consecutive frames outside the
+                                            current sync session generation before sync counts as lost; < 1 is treated as 1 */
 } RhGloveOptions;
 
 RH_API void     rh_glove_options_init(RhGloveOptions *opts);
-/* 先独占探测串口（被占 → RH_ERR_BUSY / E1102，错误串带持有者 pid），再短连读设备信息
- * （尽力而为，最多 3 次，失败不阻塞起流；顺手停掉上次残留的流），然后起流。
- * 返回时流已在起，但第一帧可能还没到。 */
+/* First checks that the serial port can be held exclusively (busy → RH_ERR_BUSY / E1102; the error string includes the
+ * holder's pid), then briefly connects to read device info (best effort, up to 3 attempts, failure does not block
+ * starting the stream; any stream left running from a previous session is stopped along the way), then starts the
+ * stream. On return the stream is starting, but the first frame may not have arrived yet. */
 RH_API RhStatus rh_glove_connect(const RhGloveTarget *target, const RhGloveOptions *opts, RhGlove **out);
-RH_API void     rh_glove_close(RhGlove *glove);          /* 停流、关串口、结束全部订阅（各收一次 END） */
+RH_API void     rh_glove_close(RhGlove *glove);          /* stops the stream, closes the serial port, ends all subscriptions (each
+                                                            receives one END) */
 
-/* Python Glove 的静态信息（connect 时缓存；rh_glove_selftest 之后会刷新，可能变）。 */
+/* Static info of Python Glove (cached at connect; refreshed by rh_glove_selftest, so it may change). */
 typedef struct RhGloveInfo {
     uint32_t       struct_size;
     RhHand         hand;
     char           port[RH_PATH_MAX];
     char           unit_id[RH_ID_MAX];
     char           usb_serial[RH_SERIAL_MAX];
-    char           sn[RH_SERIAL_MAX];              /* 固件 SN，只读；未写入时为空串 */
+    char           sn[RH_SERIAL_MAX];              /* firmware SN, read-only; empty string if never written */
     char           fw_version[RH_SERIAL_MAX];
     char           product_type[RH_ID_MAX];
     RhTactileState tactile_state;
-    RhTactileUnit  tactile_unit;                   /* 起流前就能问，与帧上同一条规则 */
+    RhTactileUnit  tactile_unit;                   /* available before the stream starts; same rule as on frames */
     uint16_t       encoder_count;
-    uint16_t       tactile_point_count;            /* 不带触觉为 0 */
+    uint16_t       tactile_point_count;            /* 0 without tactile */
     uint16_t       tactile_wire_version;
     uint8_t        button_enabled;
-    int8_t         button_supported;               /* 1 / 0 / -1 = 还不知道（还没开过流） */
-    char           tactile_kind[16];               /* 同 RhDiscoveredGlove.tactile_kind */
+    int8_t         button_supported;               /* 1 / 0 / -1 = not known yet (no stream opened yet) */
+    char           tactile_kind[16];               /* same as RhDiscoveredGlove.tactile_kind */
 } RhGloveInfo;
 
 RH_API RhStatus rh_glove_info(const RhGlove *glove, RhGloveInfo *out);
 RH_API int32_t  rh_glove_get_sn(const RhGlove *glove, char *buf, size_t buf_len);
-/* 实际速率（起流后由设备回显填入）；还没起好返回 0。 */
+/* Actual rate (filled in from the device's echo after the stream starts); 0 if not started yet. */
 RH_API double   rh_glove_effective_rate_hz(const RhGlove *glove);
 
 typedef struct RhSubscribeOptions {
     uint32_t struct_size;
-    uint32_t queue_size;                 /* 默认 64（按键 16、配对 64） */
-    uint8_t  ungated;                    /* 默认 0；1 = 门关时也收（只能看，不能拿来对齐），对应 gated=False */
+    uint32_t queue_size;                 /* default 64 (16 for buttons, 64 for pairs) */
+    uint8_t  ungated;                    /* default 0; 1 = also receive while the gate is closed (for viewing only, not for alignment),
+                                            corresponds to gated=False */
     uint8_t  _reserved[3];
 } RhSubscribeOptions;
 
 RH_API void     rh_subscribe_options_init(RhSubscribeOptions *opts);
-/* 已致命 → 原致命错误；已关闭 → RH_ERR_DISCONNECTED（E1101）。 */
+/* Already fatal → the original fatal error; already closed → RH_ERR_DISCONNECTED (E1101). */
 RH_API RhStatus rh_glove_subscribe(RhGlove *glove, const RhSubscribeOptions *opts,
                                    RhGloveFrameCallback cb, void *user_data, RhSubscription **out);
 
-/* 录制门（无条件，没有关掉它的开关）。 */
+/* Capture gate (unconditional; there is no switch to turn it off). */
 RH_API bool         rh_glove_capture_ok(const RhGlove *glove);
 RH_API RhSyncCause  rh_glove_capture_cause(const RhGlove *glove);
 RH_API RhStampTrust rh_glove_stamp_trust(const RhGlove *glove);
 
-/* 门的开关沿（Python on_capture_gate）；在内部线程调用，不要在里面关手套。传 NULL 取消。 */
+/* Open/close edges of the gate (Python on_capture_gate); called on an internal thread, do not close the glove inside it.
+ * Pass NULL to cancel. */
 typedef void (*RhCaptureGateCallback)(RhGlove *glove, bool ok, RhSyncCause cause, void *user_data);
 RH_API RhStatus rh_glove_on_capture_gate(RhGlove *glove, RhCaptureGateCallback cb, void *user_data);
 
@@ -565,21 +630,24 @@ typedef void (*RhStampTrustCallback)(RhGlove *glove, RhStampTrust state, RhStamp
                                      RhSyncCause cause, void *user_data);
 RH_API RhStatus rh_glove_on_stamp_trust(RhGlove *glove, RhStampTrustCallback cb, void *user_data);
 
-/* 流已不可恢复时返回其 E 码（RH_E_OK = 还活着），细节进 last_error。 */
+/* Once the stream can no longer recover, returns its E code (RH_E_OK = still alive; RH_E_FIRMWARE_INCOMPATIBLE when the
+ * glove firmware turned out to be incompatible); details go to last_error. */
 RH_API RhErrorCode rh_glove_fatal_error(const RhGlove *glove);
 
-/* Python stats() 的常用计数；完整字典（与 to_dict() 同键）走 rh_glove_stats_json()。 */
+/* Common counters of Python stats(); the full dictionary (same keys as to_dict()) via rh_glove_stats_json(). */
 typedef struct RhGloveStats {
     uint32_t     struct_size;
-    uint32_t     reconnects;             /* 只数停顿后的重连；连接 / 起流失败的退避重试不计 */
+    uint32_t     reconnects;             /* counts only reconnects after a stall; backoff retries of failed connects / stream starts
+                                            are not counted */
     uint64_t     frames_received;
     uint64_t     frames_dropped_local;
     uint64_t     device_skipped_total;
     uint64_t     seq_gap_frames;
-    uint64_t     frames_blocked;         /* 被录制门拦下的帧 */
-    uint64_t     frames_ungated;         /* 其中派给了免门订阅的 */
-    uint32_t     generation;             /* 当前流对象成功 START 的次数；维护窗换新流对象后从 1 重数，
-                                            与帧上一直递增的 generation 口径不同 */
+    uint64_t     frames_blocked;         /* frames blocked by the capture gate */
+    uint64_t     frames_ungated;         /* of those, the ones delivered to ungated subscriptions */
+    uint32_t     generation;             /* number of successful STARTs of the current stream object; counts from 1 again when a
+                                            maintenance window replaces the stream object, so it differs from the ever-increasing
+                                            generation on frames */
     uint32_t     queue_len;
     uint8_t      capture_open;
     uint8_t      _reserved[3];
@@ -594,108 +662,124 @@ typedef struct RhGloveStats {
 RH_API RhStatus rh_glove_stats(const RhGlove *glove, RhGloveStats *out);
 RH_API int32_t  rh_glove_stats_json(const RhGlove *glove, char *buf, size_t buf_len);
 
-/* 体检：不改设备配置，但会发停流 / 开流命令，不是严格无副作用。**录制中不要调用。**
- * 在维护窗里执行：停流 → 普通连接读设备信息、编码器链路 → 重开流，期间约 50 ms 没有新帧
- * （双手配对流同样空约 50 ms）。窗内订阅保持打开、不发 END；generation 在派发线程拿到新流第一帧时 +1，
- * 不是本函数返回那一刻。会刷新 rh_glove_info() 的设备信息缓存。不能在库回调线程里调用（RH_ERR_STATE）。 */
+/* Health check: does not change the device configuration, but sends stop / start stream commands, so it is not strictly
+ * free of side effects. **Do not call it while recording.**
+ * Runs inside a maintenance window: stop the stream → plain connection to read device info and the encoder links →
+ * restart the stream; there are no new frames for about 50 ms meanwhile (a two-hand paired stream also has a gap of about
+ * 50 ms). Subscriptions stay open during the window and receive no END; generation increments when the dispatch thread
+ * gets the first frame of the new stream, not when this function returns. Refreshes the device info cache of
+ * rh_glove_info(). Cannot be called from a library callback thread (RH_ERR_STATE). */
 typedef struct RhSelftestReport {
     uint32_t struct_size;
     uint8_t  ok;
     uint8_t  _reserved[3];
-    uint32_t encoder_offline_mask;       /* bit i = 编码器 i 离线 */
+    uint32_t encoder_offline_mask;       /* bit i = encoder i offline */
     uint32_t _reserved2;
-    char     problems[RH_NOTE_MAX * 2];  /* 多条以 '\n' 分隔；ok 时为空 */
+    char     problems[RH_NOTE_MAX * 2];  /* multiple entries separated by '\n'; empty when ok */
 } RhSelftestReport;
 
 RH_API RhStatus rh_glove_selftest(RhGlove *glove, RhSelftestReport *out);
 
-/* 按键：需 connect 时 button=1，否则 RH_ERR_UNSUPPORTED（E1202）。
- * 固件不支持时照常连接，info.button_supported = 0，日志出 N2406。 */
-RH_API RhStatus rh_glove_button_read(RhGlove *glove, RhButtonState *out);   /* 还没收到过 → RH_ERR_NOT_FOUND */
+/* Button: requires button=1 at connect, otherwise RH_ERR_UNSUPPORTED (E1202).
+ * If the firmware does not support it, the connection proceeds as usual, info.button_supported = 0, and the log shows
+ * N2406. */
+RH_API RhStatus rh_glove_button_read(RhGlove *glove, RhButtonState *out);   /* nothing received yet → RH_ERR_NOT_FOUND */
 RH_API RhStatus rh_glove_button_subscribe(RhGlove *glove, const RhSubscribeOptions *opts,
                                           RhButtonEventCallback cb, void *user_data, RhSubscription **out);
 
-/* 触觉分包（Python split_tactile / subscribe_tactile）。connect 时 split_tactile=1 且固件支持时，
- * 固件每提交一个模块样本发一个包，模块的全部样本都能拿到；帧上的 tactile 仍在，取模块最近一个样本
- * （帧上 tactile.valid = 0 表示最近一个样本太旧）。没请求分包或固件不支持时帧照旧带触觉、本订阅收不到样本。
- * opts 为 NULL：队列 512、受录制门约束；给了 opts 按 opts（注意 rh_subscribe_options_init 给的默认是 64，
- * 样本速率高于帧速率，按 64 容易溢出）。错误同 rh_glove_subscribe；型号不带触觉时照常给订阅，但收不到样本。
- * 回调在派发线程里跑，不要阻塞。 */
+/* Split tactile (Python split_tactile / subscribe_tactile). With split_tactile=1 at connect and firmware support, the
+ * firmware sends one packet for each module sample it commits, so every sample of the module is available; the tactile
+ * data on frames remains and holds the module's latest sample (tactile.valid = 0 on a frame means the latest sample is
+ * too old). Without a split request, or without firmware support, frames carry tactile as before and this subscription
+ * receives no samples.
+ * opts NULL: queue of 512, subject to the capture gate; with opts, opts apply (note that rh_subscribe_options_init gives
+ * a default of 64; the sample rate is higher than the frame rate, so 64 overflows easily). Errors are the same as
+ * rh_glove_subscribe; if the model has no tactile the subscription is still created but receives no samples.
+ * The callback runs on the dispatch thread; do not block. */
 RH_API RhStatus rh_glove_tactile_subscribe(RhGlove *glove, const RhSubscribeOptions *opts,
                                            RhTactileSampleCallback cb, void *user_data, RhSubscription **out);
-/* 当前流实际用的触觉传输方式；glove 为 NULL 返回 NONE。 */
+/* Tactile transport actually used by the current stream; NONE if glove is NULL. */
 RH_API RhTactileTransport rh_glove_tactile_transport(const RhGlove *glove);
 
-/* ───────────────────────────── 订阅（通用） ───────────────────────────── */
+/* ───────────────────────────── Subscriptions (common) ───────────────────────────── */
 
-/* 拉取模式取一条；类型须与订阅来源一致，否则 RH_ERR_INVALID_ARG。
- * 超时 → RH_ERR_TIMEOUT；上游已关 → RH_ERR_DISCONNECTED（E1101）；timeout_ms < 0 = 一直等。 */
+/* Pull mode: takes one item; the type must match the subscription's source, otherwise RH_ERR_INVALID_ARG.
+ * Timeout → RH_ERR_TIMEOUT; upstream closed → RH_ERR_DISCONNECTED (E1101); upstream closed because the glove firmware
+ * is incompatible → RH_ERR_PROTOCOL (E1205, log notice N2405; that stream is closed and does not reconnect);
+ * timeout_ms < 0 = wait forever. */
 RH_API RhStatus rh_sub_recv_glove(RhSubscription *sub, int32_t timeout_ms, RhGloveFrame *out);
 RH_API RhStatus rh_sub_recv_paired(RhSubscription *sub, int32_t timeout_ms, RhPairedFrame *out);
 RH_API RhStatus rh_sub_recv_button(RhSubscription *sub, int32_t timeout_ms, RhButtonEvent *out);
 RH_API RhStatus rh_sub_recv_tactile(RhSubscription *sub, int32_t timeout_ms, RhTactileSample *out);
-RH_API uint64_t rh_sub_dropped(const RhSubscription *sub);     /* 本订阅因队列满丢掉的累计条数 */
-/* 在别的线程调：等回调线程退出后返回。在本订阅自己的回调里调：立即返回，回调返回后回收。 */
+RH_API uint64_t rh_sub_dropped(const RhSubscription *sub);     /* cumulative items this subscription dropped because its queue was
+                                                                  full */
+/* From another thread: returns after the callback thread has exited. From this subscription's own callback: returns
+ * immediately; the handle is reclaimed after the callback returns. */
 RH_API void     rh_sub_close(RhSubscription *sub);
 
-/* ───────────────────────────── 双手 ───────────────────────────── */
+/* ───────────────────────────── Two hands ───────────────────────────── */
 
 typedef struct RhPairOptions {
     uint32_t       struct_size;
-    RhSyncPolicy   sync;                 /* 默认 ON：硬件同步，失败即报错；BEST_EFFORT 失败退主机配对 */
-    RhGloveTarget  left;                 /* 只填 port / unit_id；全空 = 按手别找 */
+    RhSyncPolicy   sync;                 /* default ON: hardware sync, failure is an error; BEST_EFFORT falls back to host pairing on
+                                            failure */
+    RhGloveTarget  left;                 /* fill in only port / unit_id; all empty = look up by handedness */
     RhGloveTarget  right;
-    RhGloveOptions glove;                /* 两手共用 */
-    uint8_t        auto_resync;          /* 默认 1：失去同步后自动重建 */
+    RhGloveOptions glove;                /* shared by both hands */
+    uint8_t        auto_resync;          /* default 1: rebuild sync automatically after it is lost */
     uint8_t        _reserved[3];
-    uint32_t       lead_frames;          /* 默认 100（合法 20..1024） */
-    uint32_t       sync_attempts;        /* 默认 3 */
-    uint32_t       resync_attempts;      /* 默认 3 */
-    uint32_t       auto_resync_attempts; /* 默认 5 */
+    uint32_t       lead_frames;          /* default 100 (valid range 20..1024) */
+    uint32_t       sync_attempts;        /* default 3 */
+    uint32_t       resync_attempts;      /* default 3 */
+    uint32_t       auto_resync_attempts; /* default 5 */
     uint32_t       _reserved2;
-    double         sync_timeout_s;       /* 默认 1.0 */
-    double         arrival_check_s;      /* 默认 1.0 */
-    double         arrival_warn_ms;      /* 默认 5.0 */
-    double         align_warn_ms;        /* 默认 1.0 */
-    double         align_fail_ms;        /* 默认 2.5 */
-    double         time_base_timeout_s;  /* 默认 1.0：起流后等两手建立时间基准的上限 */
-    double         resync_ms;            /* 默认 0.5 */
+    double         sync_timeout_s;       /* default 1.0 */
+    double         arrival_check_s;      /* default 1.0 */
+    double         arrival_warn_ms;      /* default 5.0 */
+    double         align_warn_ms;        /* default 1.0 */
+    double         align_fail_ms;        /* default 2.5 */
+    double         time_base_timeout_s;  /* default 1.0: how long to wait after the stream starts for both hands to establish a time
+                                            base */
+    double         resync_ms;            /* default 0.5 */
 } RhPairOptions;
 
-/* connect_pair 时的两项一次性自检（Python ArrivalCheck / AlignmentCheck 的公开面）。 */
+/* The two one-time self-checks done at connect_pair (the public face of Python ArrivalCheck / AlignmentCheck). */
 typedef struct RhPairConnectReport {
     uint32_t struct_size;
     uint8_t  synchronized;
     uint8_t  arrival_ok;
     uint8_t  align_measurable;
     uint8_t  align_ok;
-    double   arrival_diff_ms;            /* 同键到达差中位数 */
-    double   align_diff_ms;              /* 同键采样刻差中位数 */
-    char     reason[RH_NOTE_MAX];        /* 不 ok 时的原因 */
+    double   arrival_diff_ms;            /* median arrival difference of same-key frames */
+    double   align_diff_ms;              /* median sampling-instant difference of same-key frames */
+    char     reason[RH_NOTE_MAX];        /* reason when not ok */
 } RhPairConnectReport;
 
 RH_API void     rh_pair_options_init(RhPairOptions *opts);
 RH_API RhStatus rh_pair_connect(const RhPairOptions *opts, RhGlovePair **out);
 RH_API void     rh_pair_close(RhGlovePair *pair);
-RH_API RhGlove *rh_pair_glove(RhGlovePair *pair, RhHand hand);          /* 借用 */
+RH_API RhGlove *rh_pair_glove(RhGlovePair *pair, RhHand hand);          /* borrowed */
 RH_API bool     rh_pair_synchronized(const RhGlovePair *pair);
 RH_API RhStatus rh_pair_connect_report(const RhGlovePair *pair, RhPairConnectReport *out);
-/* 手动重建双手同步（停流约数百 ms，订阅保持打开）。失败返回 RH_ERR_STATE；strict=1 时同步建立失败为 E1700。
- * 不能在库回调线程里调用（RH_ERR_STATE）；不是 rh_pair_connect 建的 → RH_ERR_UNSUPPORTED。 */
+/* Manually rebuilds two-hand sync (the stream stops for a few hundred ms; subscriptions stay open). Failure returns
+ * RH_ERR_STATE; with strict=1, failing to establish sync is E1700.
+ * Cannot be called from a library callback thread (RH_ERR_STATE); a pair not created by rh_pair_connect →
+ * RH_ERR_UNSUPPORTED. */
 RH_API RhStatus rh_pair_resync(RhGlovePair *pair, bool strict);
 
 typedef void (*RhSyncLostCallback)(RhGlovePair *pair, const char *reason, void *user_data);
 typedef void (*RhResyncCallback)(RhGlovePair *pair, void *user_data);
-/* 挂的时候已经丢过同步，会立刻补触发一次（同 Python）。 */
+/* If sync has already been lost when the callback is attached, it fires once immediately (same as Python). */
 RH_API RhStatus rh_pair_on_sync_lost(RhGlovePair *pair, RhSyncLostCallback cb, void *user_data);
 RH_API RhStatus rh_pair_on_resync(RhGlovePair *pair, RhResyncCallback cb, void *user_data);
 
 typedef struct RhSynchronizerOptions {
     uint32_t   struct_size;
-    RhPairMode mode;                     /* 默认 INTERPOLATE */
-    int64_t    max_skew_ns;              /* 默认 50 000 000 */
-    double     pair_accuracy_ms;         /* 默认 1.0；NaN 也取默认；0.0 = 只出硬件同步对；负数 = 不设出口精度门 */
-    int32_t    tactile_gate;             /* -1 = auto（默认）/ 0 关 / 1 开 */
+    RhPairMode mode;                     /* default INTERPOLATE */
+    int64_t    max_skew_ns;              /* default 50 000 000 */
+    double     pair_accuracy_ms;         /* default 1.0; NaN also means the default; 0.0 = emit only hardware-synced pairs; negative =
+                                            no output accuracy gate */
+    int32_t    tactile_gate;             /* -1 = auto (default) / 0 off / 1 on */
     uint32_t   _reserved;
 } RhSynchronizerOptions;
 
@@ -712,13 +796,13 @@ typedef struct RhSynchronizerStats {
     uint8_t  key_trusted;
     uint8_t  device_skew_degraded;
     uint8_t  tactile_gate_open;
-    double   device_skew_p50_ms;         /* 还没结算为 NaN */
+    double   device_skew_p50_ms;         /* NaN until it has been settled */
 } RhSynchronizerStats;
 
 RH_API void     rh_synchronizer_options_init(RhSynchronizerOptions *opts);
-/* 由配对创建（时间域自动用 device 档，并自动接 resync）。 */
+/* Created from a pair (the time domain automatically uses device mode, and resync is hooked up automatically). */
 RH_API RhStatus rh_pair_synchronizer(RhGlovePair *pair, const RhSynchronizerOptions *opts, RhSynchronizer **out);
-/* 由任意两只手套创建（没走 connect_pair 时退 host 档）。 */
+/* Created from any two gloves (falls back to host mode when they were not connected via connect_pair). */
 RH_API RhStatus rh_synchronizer_create(RhGlove *left, RhGlove *right, const RhSynchronizerOptions *opts,
                                        RhSynchronizer **out);
 RH_API RhStatus rh_synchronizer_subscribe(RhSynchronizer *sync, const RhSubscribeOptions *opts,
@@ -728,17 +812,20 @@ RH_API RhStatus rh_synchronizer_stats(const RhSynchronizer *sync, RhSynchronizer
 RH_API int32_t  rh_synchronizer_stats_json(const RhSynchronizer *sync, char *buf, size_t buf_len);
 RH_API void     rh_synchronizer_close(RhSynchronizer *sync);
 
-/* ───────────────────────────── 型号识别 ───────────────────────────── */
+/* ───────────────────────────── Product identification ───────────────────────────── */
 
-/* Python HandReport 的定长字段；claims / notes 等列表只在 JSON 里。嵌在 RhProductIdentity 里，布局冻结。
- * complete / missing 不单列：由 variant_sensors 与 requested 那几只手的 sensors 算出（与 to_dict 同口径）。 */
+/* Fixed-length fields of Python HandReport; lists such as claims / notes are only in the JSON. Embedded in
+ * RhProductIdentity; layout frozen.
+ * complete / missing are not separate fields: they follow from variant_sensors and the sensors of the requested hands
+ * (same as to_dict). */
 typedef struct RhHandReport {
     RhHand         hand;
     uint8_t        present;
     uint8_t        conflict;
-    uint8_t        requested;            /* 这只手在 opts.hands 里；为 0 时其余字段全零，JSON 的 hands 里也没有它 */
-    uint8_t        tactile_valid;        /* 0 ↔ Python tactile 为 None（没探测、也没给提示），JSON 写 null */
-    RhSensorMask   sensors;              /* 这只手在位的传感器 */
+    uint8_t        requested;            /* this hand is in opts.hands; when 0, all other fields are zero and it is absent from hands
+                                            in the JSON */
+    uint8_t        tactile_valid;        /* 0 ↔ Python tactile is None (not probed and no hint given); the JSON writes null */
+    RhSensorMask   sensors;              /* sensors present on this hand */
     RhTactileState tactile;
     char           port[RH_PATH_MAX];
     char           unit_id[RH_ID_MAX];
@@ -746,18 +833,20 @@ typedef struct RhHandReport {
     char           hand_source[16];      /* register / serial / conflict / none */
     char           firmware_sn[RH_SERIAL_MAX];
     char           tracker_serial[RH_SERIAL_MAX];
-    char           tracker_source[16];   /* register / serial（按该依据定到的单元 HUB 上实挂的那只）/ 空 */
+    char           tracker_source[16];   /* register / serial (the tracker actually attached to the HUB of the unit located by that
+                                            source) / empty */
     char           camera_usb_id[16];
     char           camera_node[RH_PATH_MAX];
     char           tactile_note[RH_NOTE_MAX];
-    char           sku_rule[RH_ID_MAX];  /* 命中的序列号规则 match 串，没命中为空（规则加载时已拒超长，见 rules_path） */
-    char           variant[16];          /* 这只手单独判出的型号码，判不出为空 */
+    char           sku_rule[RH_ID_MAX];  /* match string of the serial number rule that matched, empty if none (overlong strings are
+                                            rejected when the rules are loaded, see rules_path) */
+    char           variant[16];          /* model code determined for this hand alone, empty if undetermined */
 } RhHandReport;
 
 typedef struct RhProductIdentity {
     uint32_t        struct_size;
     RhProductSource source;
-    char            variant_code[16];    /* "P1" / "PTV1"；判不出为空 */
+    char            variant_code[16];    /* "P1" / "PTV1"; empty if undetermined */
     char            variant_name[RH_ID_MAX];
     RhSensorMask    variant_sensors;
     uint32_t        _reserved;
@@ -765,73 +854,78 @@ typedef struct RhProductIdentity {
     RhHandReport    right;
 } RhProductIdentity;
 
-/* RhIdentifyOptions.tactile_given 的位 */
+/* Bits of RhIdentifyOptions.tactile_given */
 enum { RH_IDENTIFY_TACTILE_LEFT = 1u << 0, RH_IDENTIFY_TACTILE_RIGHT = 1u << 1 };
 
 typedef struct RhIdentifyOptions {
     uint32_t       struct_size;
-    uint8_t        probe;                /* 默认 1：短连读固件 SN 与触觉信息 */
-    uint8_t        tactile_given;        /* 默认 0。置位的手不探测，直接采用 tactile_left / tactile_right
-                                            （UNKNOWN 也照收，同 Python `hand in tactile`）；其它位 → RH_ERR_INVALID_ARG */
+    uint8_t        probe;                /* default 1: short connection to read the firmware SN and tactile info */
+    uint8_t        tactile_given;        /* default 0. Hands whose bit is set are not probed; tactile_left / tactile_right are used
+                                            directly (UNKNOWN is accepted as well, same as Python `hand in tactile`); other bits →
+                                            RH_ERR_INVALID_ARG */
     uint8_t        _reserved[2];
-    RhHands        hands;                /* 默认 RH_HANDS_BOTH；Python 的列表写法（定序 / 空列表）C 不提供 */
-    RhTactileState tactile_left;         /* 仅 tactile_given 置位时读；越界值 → RH_ERR_INVALID_ARG */
+    RhHands        hands;                /* default RH_HANDS_BOTH; Python's list form (ordered / empty list) is not offered in C */
+    RhTactileState tactile_left;         /* read only when the tactile_given bit is set; out-of-range value → RH_ERR_INVALID_ARG */
     RhTactileState tactile_right;
     uint32_t       _reserved2;
-    const char    *product;              /* NULL 等价 "auto"：按证据判；"P1" / "PTV1" = 声明。去首尾空白、不分大小写；
-                                            未知型号码 → RH_ERR_INVALID_ARG */
+    const char    *product;              /* NULL is equivalent to "auto": decide by evidence; "P1" / "PTV1" = declaration. Leading and
+                                            trailing whitespace trimmed, case-insensitive; unknown model code → RH_ERR_INVALID_ARG */
     const char    *sysfs_root;
-    const char    *rules_path;           /* NULL → $REVOHUMAN_PRODUCTS → ~/.config/revohuman/products.yaml
-                                            （文件不存在则只用内置规则；存在时用户规则排在内置之前）；
-                                            规则里的正则超出共同子集，或 match 串长于 RH_ID_MAX-1 字节 → RH_ERR_INVALID_DATA */
+    const char    *rules_path;           /* NULL → $REVOHUMAN_PRODUCTS → ~/.config/revohuman/products.yaml (if the file does not exist
+                                            only the built-in rules are used; if it exists, user rules come before the built-in ones);
+                                            a regex in the rules beyond the common subset, or a match string longer than RH_ID_MAX-1
+                                            bytes → RH_ERR_INVALID_DATA */
 } RhIdentifyOptions;
 
 RH_API void     rh_identify_options_init(RhIdentifyOptions *opts);
 RH_API RhStatus rh_identify(const RhIdentifyOptions *opts, RhProductIdentity *out);
 RH_API int32_t  rh_identify_json(const RhIdentifyOptions *opts, char *buf, size_t buf_len);  /* == to_dict() */
-/* 型号码 → 传感器位图（未知码返回 0）。 */
+/* Model code → sensor bitmask (unknown codes return 0). */
 RH_API RhSensorMask rh_variant_sensors(const char *code);
 
-/* ───────────────────────────── 关节映射 ───────────────────────────── */
+/* ───────────────────────────── Joint mapping ───────────────────────────── */
 
 typedef struct RhJointSpec {
     uint32_t struct_size;
     uint32_t index;
-    double   sign;                       /* +1.0 / −1.0；0.0 = 该路置零弃用 */
+    double   sign;                       /* +1.0 / −1.0; 0.0 = this channel is zeroed and unused */
     double   zero_deg;
     double   offset_rad;
-    char     name[RH_ID_MAX];            /* 不带手别前缀，如 "index_DIP_joint" */
+    char     name[RH_ID_MAX];            /* without the handedness prefix, e.g. "index_DIP_joint" */
     char     finger[16];                 /* index / middle / ring / little / thumb */
     char     joint[16];                  /* DIP / PIP / MCP / MPR / CMR / CMP */
 } RhJointSpec;
 
-/* 映射表版本，如 "0.2"（< 1.0 表示官方映射仍待确认）。 */
+/* Mapping table version, e.g. "0.2" (< 1.0 means the official mapping is still to be confirmed). */
 RH_API const char *rh_joint_map_version(void);
-/* product_code 为 NULL 或未知 → 退回 "default" 表（同 Python joint_specs，不报错）。 */
+/* product_code NULL or unknown → falls back to the "default" table (same as Python joint_specs, no error). */
 RH_API RhStatus rh_joint_spec(const char *product_code, uint32_t index, RhJointSpec *out);
-/* "<left|right>_<name>"，即广播 hello.joints 里的名字；hand = UNKNOWN 时不加前缀。 */
+/* "<left|right>_<name>", i.e. the name in the broadcast's hello.joints; no prefix when hand = UNKNOWN. */
 RH_API int32_t  rh_joint_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
-/* q = sign·radians(wrap180(deg − zero)) + offset，逐位同 Python：NaN 进 NaN 出，±inf 得 NaN，
- * wrap180 边界上可能取到 +180（不钳位）。 */
+/* q = sign·radians(wrap180(deg − zero)) + offset, bit-identical to Python: NaN in, NaN out; ±inf gives NaN;
+ * +180 may come out at the wrap180 boundary (not clamped). */
 RH_API RhStatus rh_joints_to_radians(const char *product_code, const double deg[RH_JOINT_COUNT],
                                      double rad[RH_JOINT_COUNT]);
 
-/* ───────────────────────────── 整套（kit） ───────────────────────────── */
+/* ───────────────────────────── Kit ───────────────────────────── */
 
 typedef struct RhKitOptions {
     uint32_t       struct_size;
-    RhHands        hands;                /* 默认 BOTH */
-    const char    *product;              /* 默认 "auto"；"P1" / "PTV1" = 声明，与在位硬件相反即拒 */
-    RhSensorMask   sensors;              /* 0 = 型号应有、且本期 C SDK 支持的全部；要了不支持的 → UNSUPPORTED */
-    uint8_t        strict;               /* 默认 1：要了但在位缺 → E1804 */
+    RhHands        hands;                /* default BOTH */
+    const char    *product;              /* default "auto"; "P1" / "PTV1" = declaration, refused if it contradicts the present
+                                            hardware */
+    RhSensorMask   sensors;              /* 0 = everything the model should have and this version of the C SDK supports; requesting an
+                                            unsupported sensor → UNSUPPORTED */
+    uint8_t        strict;               /* default 1: requested but missing from the present hardware → E1804 */
     uint8_t        _reserved[3];
-    RhSyncPolicy   sync;                 /* 默认 ON */
+    RhSyncPolicy   sync;                 /* default ON */
     uint32_t       _reserved2;
-    double         rate_hz;              /* 默认 200 */
+    double         rate_hz;              /* default 200 */
     const char    *sysfs_root;
     const char    *rules_path;
     RhGloveOptions glove;
-    const char    *tracker_config_json;  /* 预留，本版本不读（C SDK 不含 tracker：sensors 要 TRACKER → UNSUPPORTED） */
+    const char    *tracker_config_json;  /* reserved, not read in this version (the C SDK has no tracker: TRACKER in sensors →
+                                            UNSUPPORTED) */
 } RhKitOptions;
 
 typedef void (*RhKitFaultCallback)(RhKit *kit, RhErrorCode code, bool recoverable, void *user_data);
@@ -840,44 +934,61 @@ RH_API void          rh_kit_options_init(RhKitOptions *opts);
 RH_API RhStatus      rh_kit_open(const RhKitOptions *opts, RhKit **out);
 RH_API void          rh_kit_close(RhKit *kit);
 RH_API RhStatus      rh_kit_identity(const RhKit *kit, RhProductIdentity *out);
-RH_API RhSensorMask  rh_kit_sensors(const RhKit *kit);                 /* 实际启用的 */
-RH_API RhGlove      *rh_kit_glove(RhKit *kit, RhHand hand);             /* 借用；没开这只手为 NULL */
-RH_API RhGlovePair  *rh_kit_pair(RhKit *kit);                           /* 借用；单手为 NULL */
-RH_API RhTracker    *rh_kit_tracker(RhKit *kit);                        /* 借用；没开为 NULL */
+RH_API RhSensorMask  rh_kit_sensors(const RhKit *kit);                 /* the ones actually enabled */
+RH_API RhGlove      *rh_kit_glove(RhKit *kit, RhHand hand);             /* borrowed; NULL if this hand is not open */
+RH_API RhGlovePair  *rh_kit_pair(RhKit *kit);                           /* borrowed; NULL for a single hand */
+RH_API RhTracker    *rh_kit_tracker(RhKit *kit);                        /* borrowed; NULL if not open */
 RH_API RhStatus      rh_kit_synchronizer(RhKit *kit, const RhSynchronizerOptions *opts, RhSynchronizer **out);
-RH_API RhErrorCode   rh_kit_fatal(const RhKit *kit);                    /* RH_E_OK = 无锁存故障 */
+RH_API RhErrorCode   rh_kit_fatal(const RhKit *kit);                    /* RH_E_OK = no latched fault */
 RH_API RhStatus      rh_kit_on_fault(RhKit *kit, RhKitFaultCallback cb, void *user_data);
 RH_API int32_t       rh_kit_status_json(const RhKit *kit, char *buf, size_t buf_len);  /* == kit.status() */
 
-/* ───────────────────────────── 自动整套（autokit） ───────────────────────────── */
+/* ───────────────────────────── Automatic kit (autokit) ───────────────────────────── */
 
-/* 自动管理一对手套的打开、重试与重开（C 扩展，Python 没有）。rh_autokit_open 立即返回，打开与关闭都在库里的一条后台线程做；
- * 调用方轮询每只手的状态（rh_autokit_status）并拉帧（rh_autokit_recv）。规则：
- *   - 在位 = sysfs 里有、认得出是哪只手的单元（手别依据见文件头；还没读过手别登记的，扫描时短开读一次）。
- *   - 起始：两只都在位 → 一个双手 kit（同步按 kit.sync，默认 BEST_EFFORT）；否则逐只打开，缺的每 retry_ms 重试；
- *     之后两只都还没开、又同时在位 → 同样开双手 kit；双手 kit 打不开 → 立即改逐只打开。
- *   - 一只在单独出数、另一只后来在位：另一只单独开，不打断在出数的那只。开 upgrade_to_pair（默认关）时改为关掉单独的那只、
- *     整对重开：出数的那只断流约一次打开的时长，open_count 加一；整对没开成就改回逐只，之后要等另一只被拔掉一次才再试，
- *     不可重试的错（如不支持时间同步）不再试；配对断开过的两只（pair_lost）不升级。
- *   - 打开失败：可重试的（没插、口忙、超时、识别中重枚举等）retry_ms 后再试；型号 / 变体不符、固件不兼容等 → FAILED，不再试。
- *   - 断线由 kit 自己重连并重建同步，不会让流结束；流结束（rh_sub_recv_glove 报错）只在上游致命错误时出现，由这里处理：
- *     单手 kit 关掉、retry_ms 后重开；双手 kit 整个关掉，两只进 AWAIT_PAIR：两只都在位就整对重开；只有一只在位满
- *     pair_wait_ms 就单独开它，另一只之后也单独开，两只都置 pair_lost，从此不再自动组对（直到 rh_autokit_close）。
- *   - 该手每（重新）打开一次 open_count 加一；同一 open_count 的帧、身份与设备信息来自同一条流。
- * 降级都显式给出：paired = 在双手 kit 里；synchronized = paired 且硬件同步（rh_pair_synchronized）；pair_lost 见上。
- * 线程：status / recv / identity / glove_info 可从任意线程并发调用；recv 在锁外读，非 0 的 timeout_ms 不挡别的调用。
- * rh_autokit_close 可与别的线程上的这些调用并发：先等在途的调用返回（recv 最多等它的 timeout_ms），再停后台线程、关全部
- * 订阅与 kit；close 开始之后进来的调用报 RH_ERR_INVALID_ARG（句柄已关）。 */
+/* Automatically manages opening, retrying and reopening a pair of gloves (C extension, not in Python). rh_autokit_open
+ * returns immediately; opening and closing both happen on a background thread inside the library. The caller polls each
+ * hand's state (rh_autokit_status) and pulls frames (rh_autokit_recv). Rules:
+ *   - Present = a unit that is in sysfs and whose handedness can be determined (for the handedness source see the file
+ *     header; units whose handedness registration has not been read yet are opened briefly once during the scan).
+ *   - Start: both present → one two-hand kit (sync per kit.sync, default BEST_EFFORT); otherwise each hand is opened on
+ *     its own and a missing one is retried every retry_ms. Later, if neither hand is open yet and both become present at
+ *     the same time → likewise a two-hand kit; if the two-hand kit cannot be opened → switch to opening each hand on its
+ *     own right away.
+ *   - One hand is streaming alone and the other becomes present later: the other one is opened on its own without
+ *     interrupting the streaming one. With upgrade_to_pair (off by default) the lone one is closed instead and the whole
+ *     pair is reopened: the streaming hand stops for about the duration of one open and its open_count increments; if the
+ *     pair cannot be opened it goes back to opening each hand on its own, and the next attempt waits until the other hand
+ *     has been unplugged once; non-retryable errors (such as time sync not supported) are not retried; two hands whose
+ *     pair was broken (pair_lost) are not upgraded.
+ *   - Open failure: retryable failures (not plugged in, port busy, timeout, re-enumeration during identification, etc.)
+ *     are retried after retry_ms; model / variant mismatch, incompatible firmware, etc. → FAILED, no more retries.
+ *   - Disconnects are handled by the kit itself, which reconnects and rebuilds sync without ending the stream; a stream
+ *     ends (rh_sub_recv_glove returns an error) only on an upstream fatal error, which is handled here: a single-hand kit
+ *     is closed and reopened after retry_ms; a two-hand kit is closed as a whole and both hands go to AWAIT_PAIR: if both
+ *     are present the pair is reopened; if only one has been present for pair_wait_ms it is opened on its own, the other
+ *     one is later also opened on its own, both get pair_lost, and they are no longer paired automatically (until
+ *     rh_autokit_close).
+ *   - open_count increments every time the hand is (re)opened; frames, identity and device info with the same open_count
+ *     come from the same stream.
+ * Degradation is always explicit: paired = in a two-hand kit; synchronized = paired and hardware-synchronized
+ * (rh_pair_synchronized); pair_lost see above.
+ * Threads: status / recv / identity / glove_info can be called concurrently from any thread; recv reads outside the lock,
+ * so a non-zero timeout_ms does not hold up other calls.
+ * rh_autokit_close may run concurrently with these calls on other threads: it first waits for in-flight calls to return
+ * (recv waits at most its timeout_ms), then stops the background thread and closes all subscriptions and kits; calls that
+ * come in after close has started report RH_ERR_INVALID_ARG (handle closed). */
 typedef int32_t RhAutoState;
 enum { RH_AUTO_ABSENT = 0, RH_AUTO_OPENING = 1, RH_AUTO_AWAIT_PAIR = 2, RH_AUTO_STREAMING = 3, RH_AUTO_FAILED = 4 };
 
 typedef struct RhAutoKitOptions {
     uint32_t     struct_size;
-    uint32_t     retry_ms;               /* 默认 2000 */
-    uint32_t     pair_wait_ms;           /* 默认 10000：配对断开后只回来一只时，等多久再单独开它 */
-    uint32_t     queue_size;             /* 默认 256：每只手套的订阅队列 */
-    RhKitOptions kit;                    /* hands 只认 BOTH；sync 默认 BEST_EFFORT；其余同 rh_kit_open */
-    uint8_t      upgrade_to_pair;        /* 默认 0；1 = 单独出数的一只在另一只到位时升级成整对（见上） */
+    uint32_t     retry_ms;               /* default 2000 */
+    uint32_t     pair_wait_ms;           /* default 10000: after a pair breaks and only one hand comes back, how long to wait before
+                                            opening it on its own */
+    uint32_t     queue_size;             /* default 256: subscription queue per glove */
+    RhKitOptions kit;                    /* hands accepts only BOTH; sync defaults to BEST_EFFORT; the rest as in rh_kit_open */
+    uint8_t      upgrade_to_pair;        /* default 0; 1 = a hand streaming alone is upgraded to a full pair when the other one arrives
+                                            (see above) */
     uint8_t      _reserved[7];
 } RhAutoKitOptions;
 
@@ -888,212 +999,247 @@ typedef struct RhAutoHandStatus {
     uint8_t           paired;
     uint8_t           synchronized;
     uint8_t           pair_lost;
-    uint8_t           absent;            /* 最近一次打开失败是因为没插手套 */
-    uint8_t           capture_ok;        /* STREAMING 时有效（rh_glove_capture_ok） */
+    uint8_t           absent;            /* the last open failed because the glove was not plugged in */
+    uint8_t           capture_ok;        /* valid when STREAMING (rh_glove_capture_ok) */
     uint8_t           _reserved[3];
     RhSyncCause       capture_cause;
-    RhErrorCode       last_error;        /* 最近一次打开失败或流结束的码；成功打开后清零 */
-    uint32_t          tactile_dropped;   /* 本次打开以来触觉样本订阅丢的条数（超出按 UINT32_MAX 封顶）；没开分包为 0 */
-    uint64_t          dropped;           /* 本次打开以来 SDK 丢的帧（rh_sub_dropped） */
-    char              last_error_text[256];  /* ABSENT 时还带上认不出手别的在位手套的 hand_note（如两只序列号相同） */
+    RhErrorCode       last_error;        /* code of the last open failure or stream end; cleared after a successful open */
+    uint32_t          tactile_dropped;   /* items dropped by the tactile sample subscription since this open (capped at UINT32_MAX); 0
+                                            without split */
+    uint64_t          dropped;           /* frames dropped by the SDK since this open (rh_sub_dropped) */
+    char              last_error_text[256];  /* when ABSENT, also carries the hand_note of present gloves whose handedness cannot be
+                                                determined (e.g. both have the same serial number) */
 } RhAutoHandStatus;
 
 RH_API void     rh_autokit_options_init(RhAutoKitOptions *opts);
-/* opts 为 NULL = 全默认；kit.hands 不是 BOTH、retry_ms 或 queue_size 为 0、速率非法 → RH_ERR_INVALID_ARG。 */
+/* opts NULL = all defaults; kit.hands not BOTH, retry_ms or queue_size 0, or an invalid rate → RH_ERR_INVALID_ARG. */
 RH_API RhStatus rh_autokit_open(const RhAutoKitOptions *opts, RhAutoKit **out);
-/* 等在途的调用返回、后台线程做完手上的一步，再关掉全部订阅与 kit。NULL 安全；不能在库回调线程里调。 */
+/* Waits for in-flight calls to return and for the background thread to finish its current step, then closes all
+ * subscriptions and kits. NULL-safe; must not be called from a library callback thread. */
 RH_API void     rh_autokit_close(RhAutoKit *autokit);
-/* 该手的状态快照。 */
+/* Snapshot of the hand's state. */
 RH_API RhStatus rh_autokit_status(RhAutoKit *autokit, RhHand hand, RhAutoHandStatus *out);
-/* 该手当前流的下一帧（同 rh_sub_recv_glove），open_count 非 NULL 时写入帧所属的打开序号。不在出数 → RH_ERR_STATE；
- * 没帧 → RH_ERR_TIMEOUT；流结束 → rh_sub_recv_glove 的错误，后台线程随即按上面的规则处理。 */
+/* Next frame of the hand's current stream (same as rh_sub_recv_glove); when open_count is non-NULL it receives the open
+ * number the frame belongs to. Not streaming → RH_ERR_STATE; no frame → RH_ERR_TIMEOUT; stream ended → the error of
+ * rh_sub_recv_glove (RH_ERR_DISCONNECTED, or RH_ERR_PROTOCOL for incompatible firmware), and the background thread then
+ * handles it per the rules above. */
 RH_API RhStatus rh_autokit_recv(RhAutoKit *autokit, RhHand hand, int32_t timeout_ms, RhGloveFrame *out,
                                 uint32_t *open_count);
-/* 该手当前流的下一个触觉样本（同 rh_sub_recv_tactile），规则同 rh_autokit_recv。kit.glove.split_tactile = 1 时
- * 每次打开都开一条触觉订阅（队列 512、走门）；没设 → RH_ERR_UNSUPPORTED。固件不支持分包时一直 RH_ERR_TIMEOUT，
- * 触觉照旧在帧上（rh_glove_tactile_transport 可查）。 */
+/* Next tactile sample of the hand's current stream (same as rh_sub_recv_tactile); rules as for rh_autokit_recv. With
+ * kit.glove.split_tactile = 1, every open also opens a tactile subscription (queue of 512, gated); otherwise →
+ * RH_ERR_UNSUPPORTED. If the firmware does not support split packets it keeps returning RH_ERR_TIMEOUT and the tactile
+ * data stays on the frames (see rh_glove_tactile_transport). */
 RH_API RhStatus rh_autokit_recv_tactile(RhAutoKit *autokit, RhHand hand, int32_t timeout_ms, RhTactileSample *out,
                                         uint32_t *open_count);
-/* 该手当前流的产品身份（同 rh_kit_identity）/ 设备信息（同 rh_glove_info，打开时取的快照）。open_count 非 NULL 时写入
- * 对应的打开序号，与 rh_autokit_recv 给的相同才是同一条流。不在出数 → RH_ERR_STATE；out 为 NULL 或 struct_size 太小
- * → RH_ERR_INVALID_ARG；失败不写 out。 */
+/* Product identity (same as rh_kit_identity) / device info (same as rh_glove_info, the snapshot taken at open) of the
+ * hand's current stream. When open_count is non-NULL it receives the corresponding open number; it is the same stream
+ * only if it equals the one given by rh_autokit_recv. Not streaming → RH_ERR_STATE; out NULL or struct_size too small →
+ * RH_ERR_INVALID_ARG; out is not written on failure. */
 RH_API RhStatus rh_autokit_identity(RhAutoKit *autokit, RhHand hand, RhProductIdentity *out, uint32_t *open_count);
 RH_API RhStatus rh_autokit_glove_info(RhAutoKit *autokit, RhHand hand, RhGloveInfo *out, uint32_t *open_count);
 
-/* ───────────────────────────── 触觉去皮 ───────────────────────────── */
+/* ───────────────────────────── Tactile tare ───────────────────────────── */
 
-/* 触觉硬件去皮：库向手套发一条固定的去皮请求，手套把命令转给触觉模块，由模块以当下读数为零点。
- * 这是对设备的写入：只在手套静止、触觉面没被触碰时请求，请求之后约 3 s 内保持不碰。
- *   - rh_glove_tactile_tare_request 立即返回，流程在库的后台线程里跑；结果用 rh_glove_tactile_tare_status 轮询，
- *     version 变了就是有新状态。
- *   - 成功的终态是 RH_TARE_RESULT_SENT：去皮命令已发送，模块是否完成未确认（手套不回报模块完成）。
- *   - 库在任何情况下都不自动重发。结果待确认（UNCONFIRMED / TIMEOUT / ABANDONED）时由调用方决定要不要再请求。
- *   - 长按手套按键约 2 s 也会去皮，与主机请求共用设备上的请求序号；流在跑时库每秒读一次请求记录，
- *     按键或别的主机发起的去皮会出现在 origin / outcome 里（并记一条 INFO 日志）。
- *   - 能否由主机触发在每次（重）连、开流之前查一次；查到之前 support = UNKNOWN。
- *   - 请求记录在手套主控的内存里，主控复位即清空（mcu_reset = 1）；去皮之后手套重连过时 stale = 1，
- *     这两种情况下模块零点是否保持都未确认，tared 置 0。
- * 去皮不改变帧里触觉数据的格式与单位。线程：两个函数都可从任意线程（含库回调线程）调用，request 不阻塞。 */
+/* Tactile hardware tare: the library sends one fixed tare request to the glove; the glove passes the command on to the
+ * tactile modules, which take their current readings as zero.
+ * This is a write to the device: request it only while the glove is still and the tactile surfaces are not touched, and
+ * keep them untouched for about 3 s after the request.
+ *   - rh_glove_tactile_tare_request returns immediately and the procedure runs on a library background thread; poll the
+ *     result with rh_glove_tactile_tare_status; a changed version means there is a new state.
+ *   - The successful final state is RH_TARE_RESULT_SENT: the tare command has been sent; whether the modules completed
+ *     it is not confirmed (the glove does not report module completion).
+ *   - The library never resends on its own. When the result is unconfirmed (UNCONFIRMED / TIMEOUT / ABANDONED), the
+ *     caller decides whether to request again.
+ *   - Holding the glove button for about 2 s also tares, sharing the device's request sequence number with host requests;
+ *     while the stream runs the library reads the request record once per second, so tares started by the button or by
+ *     another host show up in origin / outcome (and an INFO log line is written).
+ *   - Whether the host can trigger a tare is checked once before every (re)connect and stream start; until then support
+ *     is UNKNOWN.
+ *   - The request record lives in the glove MCU's memory and is cleared when the MCU resets (mcu_reset = 1); if the
+ *     glove has reconnected since the tare, stale = 1. In both cases it is not confirmed whether the modules kept their
+ *     zero, and tared is set to 0.
+ * Taring does not change the format or unit of the tactile data in frames. Threads: both functions can be called from
+ * any thread (including library callback threads); request does not block. */
 typedef int32_t RhTareSupport;
 enum { RH_TARE_SUPPORT_UNKNOWN = 0, RH_TARE_SUPPORT_SUPPORTED = 1, RH_TARE_SUPPORT_UNSUPPORTED = 2 };
 
-/* 最近一次去皮请求（不论谁发起）由谁发起。 */
+/* Who started the most recent tare request (whoever it was). */
 typedef int32_t RhTareOrigin;
 enum {
     RH_TARE_ORIGIN_NONE       = 0,
-    RH_TARE_ORIGIN_THIS_HOST  = 1,   /* 本句柄发起 */
-    RH_TARE_ORIGIN_BUTTON     = 2,   /* 手套按键 */
-    RH_TARE_ORIGIN_OTHER_HOST = 3,   /* 主机入口，但不是本句柄（别的进程 / 之前的连接） */
+    RH_TARE_ORIGIN_THIS_HOST  = 1,   /* started by this handle */
+    RH_TARE_ORIGIN_BUTTON     = 2,   /* glove button */
+    RH_TARE_ORIGIN_OTHER_HOST = 3,   /* a host request, but not from this handle (another process / an earlier connection) */
     RH_TARE_ORIGIN_UNKNOWN    = 4,
 };
 
-/* 最近一次去皮请求（不论谁发起）的结论。 */
+/* Outcome of the most recent tare request (whoever started it). */
 typedef int32_t RhTareOutcome;
 enum {
-    RH_TARE_OUTCOME_NONE       = 0,  /* 设备上没有请求记录 */
-    RH_TARE_OUTCOME_PENDING    = 1,  /* 手套已接受，处理中 */
-    RH_TARE_OUTCOME_SENT       = 2,  /* 去皮命令已发送，模块是否完成未确认 */
+    RH_TARE_OUTCOME_NONE       = 0,  /* no request record on the device */
+    RH_TARE_OUTCOME_PENDING    = 1,  /* accepted by the glove, in progress */
+    RH_TARE_OUTCOME_SENT       = 2,  /* tare command sent; whether the modules completed it is not confirmed */
     RH_TARE_OUTCOME_FAILED     = 3,
     RH_TARE_OUTCOME_CANCELLED  = 4,
-    RH_TARE_OUTCOME_IDLE       = 5,  /* 记录状态异常 */
-    RH_TARE_OUTCOME_SUPERSEDED = 6,  /* 本句柄的请求被另一次请求覆盖 */
-    RH_TARE_OUTCOME_TIMEOUT    = 7,  /* 本句柄等结论超时 */
+    RH_TARE_OUTCOME_IDLE       = 5,  /* abnormal record state */
+    RH_TARE_OUTCOME_SUPERSEDED = 6,  /* this handle's request was overridden by another request */
+    RH_TARE_OUTCOME_TIMEOUT    = 7,  /* this handle timed out waiting for an outcome */
 };
 
-/* 本句柄最近一次 rh_glove_tactile_tare_request 的结局。 */
+/* How this handle's most recent rh_glove_tactile_tare_request ended. */
 typedef int32_t RhTareResult;
 enum {
-    RH_TARE_RESULT_NONE        = 0,  /* 没请求过 */
+    RH_TARE_RESULT_NONE        = 0,  /* never requested */
     RH_TARE_RESULT_RUNNING     = 1,
-    RH_TARE_RESULT_SENT        = 2,  /* 去皮命令已发送，模块是否完成未确认 */
-    RH_TARE_RESULT_REJECTED    = 3,  /* 手套当场拒绝（不支持 / 忙 / 模块离线 / 数据无效 / 内部错误），没有去皮 */
-    RH_TARE_RESULT_NOT_SENT    = 4,  /* 发送前读请求记录失败，请求没发 */
-    RH_TARE_RESULT_UNCONFIRMED = 5,  /* 请求的应答丢了、记录也没见推进：是否被接受待确认 */
-    RH_TARE_RESULT_FAILED      = 6,  /* 手套报失败（命令可能已经发出） */
+    RH_TARE_RESULT_SENT        = 2,  /* tare command sent; whether the modules completed it is not confirmed */
+    RH_TARE_RESULT_REJECTED    = 3,  /* rejected by the glove on the spot (unsupported / busy / module offline / invalid data /
+                                        internal error);
+                                        no tare done */
+    RH_TARE_RESULT_NOT_SENT    = 4,  /* reading the request record before sending failed; the request was not sent */
+    RH_TARE_RESULT_UNCONFIRMED = 5,  /* the response to the request was lost and the record did not advance either: whether it was
+                                        accepted is unconfirmed */
+    RH_TARE_RESULT_FAILED      = 6,  /* the glove reported failure (the command may already have been sent) */
     RH_TARE_RESULT_CANCELLED   = 7,
-    RH_TARE_RESULT_SUPERSEDED  = 8,  /* 被另一次请求覆盖 */
-    RH_TARE_RESULT_TIMEOUT     = 9,  /* 等结论超时（期间连接中断也归这里）：结果待确认 */
-    RH_TARE_RESULT_ABANDONED   = 10, /* 等结论期间句柄被关闭：结果待确认 */
+    RH_TARE_RESULT_SUPERSEDED  = 8,  /* overridden by another request */
+    RH_TARE_RESULT_TIMEOUT     = 9,  /* timed out waiting for an outcome (including a connection loss meanwhile): result unconfirmed */
+    RH_TARE_RESULT_ABANDONED   = 10, /* the handle was closed while waiting for an outcome: result unconfirmed */
 };
 
 typedef struct RhTactileTareStatus {
     uint32_t      struct_size;
     RhTareSupport support;
-    uint8_t       in_progress;       /* 本句柄的请求进行中 */
-    uint8_t       tared;             /* outcome == SENT 且之后没重连、主控没复位 */
-    uint8_t       stale;             /* 最近一次去皮之后手套重连过（或去皮早于本次连接） */
-    uint8_t       mcu_reset;         /* 设备上的请求记录被清空：手套主控复位过 */
-    uint8_t       has_record;        /* 读到过设备上的请求记录 */
+    uint8_t       in_progress;       /* this handle's request is in progress */
+    uint8_t       tared;             /* outcome == SENT, with no reconnect and no MCU reset since */
+    uint8_t       stale;             /* the glove has reconnected since the most recent tare (or the tare predates this connection) */
+    uint8_t       mcu_reset;         /* the device's request record was cleared: the glove MCU has reset */
+    uint8_t       has_record;        /* a request record has been read from the device */
     uint8_t       _reserved[3];
     RhTareOrigin  origin;
     RhTareOutcome outcome;
     RhTareResult  request_result;
-    uint32_t      sequence;          /* 设备请求序号（has_record 时有效）：按键与主机共用，每接受一次加一，回绕 */
-    uint64_t      requests;          /* 本句柄收下的请求次数 */
-    uint64_t      version;           /* 状态每变一次加一 */
-    uint64_t      poll_errors;       /* 读请求记录失败的次数 */
-    int64_t       outcome_wall_ns;   /* outcome 成立的主机时刻，0 = 没有 */
-    int64_t       request_wall_ns;   /* request_result 落定的主机时刻，0 = 没有 */
-    int64_t       record_wall_ns;    /* 最近一次读到请求记录的主机时刻，0 = 没读到过 */
-    char          message[RH_NOTE_MAX];          /* outcome 的说明 */
-    char          request_message[RH_NOTE_MAX];  /* request_result 的说明（如拒绝原因） */
-    char          support_message[RH_NOTE_MAX];  /* 为什么不支持 / 还没查成 */
+    uint32_t      sequence;          /* device request sequence number (valid with has_record): shared by button and host, +1 per
+                                        accepted request, wraps around */
+    uint64_t      requests;          /* number of requests this handle has accepted */
+    uint64_t      version;           /* +1 on every state change */
+    uint64_t      poll_errors;       /* number of failed request record reads */
+    int64_t       outcome_wall_ns;   /* host time at which outcome was established, 0 = none */
+    int64_t       request_wall_ns;   /* host time at which request_result was settled, 0 = none */
+    int64_t       record_wall_ns;    /* host time of the most recent request record read, 0 = never read */
+    char          message[RH_NOTE_MAX];          /* description of outcome */
+    char          request_message[RH_NOTE_MAX];  /* description of request_result (e.g. the rejection reason) */
+    char          support_message[RH_NOTE_MAX];  /* why it is unsupported / not checked yet */
 } RhTactileTareStatus;
 
-/* 请求一次去皮，立即返回。收下 → RH_OK，结果见 rh_glove_tactile_tare_status。收不下（不发任何请求）：
- *   型号不带触觉 → RH_ERR_UNSUPPORTED（E1800）；固件不支持主机触发 → RH_ERR_UNSUPPORTED（E1202），可改用按键去皮；
- *   能力还没查到 / 流没在跑（连接中、重连中、维护中）/ 上一次还在进行 → RH_ERR_STATE；句柄已关 → RH_ERR_DISCONNECTED。 */
+/* Requests one tare and returns immediately. Accepted → RH_OK, result via rh_glove_tactile_tare_status. Not accepted (no
+ * request is sent):
+ *   the model has no tactile → RH_ERR_UNSUPPORTED (E1800); the firmware does not support host-triggered tare →
+ *   RH_ERR_UNSUPPORTED (E1202), use the button tare instead (hold the glove button for about 2 s);
+ *   capability not checked yet / stream not running (connecting, reconnecting, in maintenance) / the previous one still
+ *   in progress → RH_ERR_STATE; handle closed → RH_ERR_DISCONNECTED. */
 RH_API RhStatus rh_glove_tactile_tare_request(RhGlove *glove);
-/* 去皮状态快照；out 为 NULL 或 struct_size 太小 → RH_ERR_INVALID_ARG。 */
+/* Snapshot of the tare state; out NULL or struct_size too small → RH_ERR_INVALID_ARG. */
 RH_API RhStatus rh_glove_tactile_tare_status(const RhGlove *glove, RhTactileTareStatus *out);
-/* autokit 里该手当前流的去皮（同上两个函数）。open_count 非 NULL 时写入对应的打开序号；每次重新打开状态从头算。
- * 不在出数 → RH_ERR_STATE。 */
+/* Tare for the hand's current stream in autokit (same as the two functions above). When open_count is non-NULL it
+ * receives the corresponding open number; the state starts over on every reopen.
+ * Not streaming → RH_ERR_STATE. */
 RH_API RhStatus rh_autokit_tactile_tare_request(RhAutoKit *autokit, RhHand hand, uint32_t *open_count);
 RH_API RhStatus rh_autokit_tactile_tare_status(RhAutoKit *autokit, RhHand hand, RhTactileTareStatus *out,
                                                uint32_t *open_count);
 
-/* ───────────────────────────── 本机广播 ───────────────────────────── */
+/* ───────────────────────────── Local broadcast ───────────────────────────── */
 
-/* 与 Python `revohuman live` 同一线协议（schema 1）：AF_UNIX 流 socket，4 字节大端长度 + 紧凑 UTF-8 JSON；
- * 新连接先收 hello 再收最新 status；每客户端独立发送线程 + 有界队列（满丢最旧），
- * 单条消息整次写完超过 send_timeout_s 即断开该客户端；stop 时广播 bye。现有 simulation/ 查看器直接可连。
+/* Same wire protocol as Python `revohuman live` (schema 1): AF_UNIX stream socket, 4-byte big-endian length + compact
+ * UTF-8 JSON. A new connection first receives hello, then the latest status; each client has its own send thread and a
+ * bounded queue (the oldest is dropped when full), and a client is disconnected when writing one whole message takes
+ * longer than send_timeout_s; stop broadcasts bye. The existing viewer in the Python SDK's simulation/ connects directly.
  *
- * socket 路径解析（服务端）：显式 socket_path → $REVOHUMAN_LIVE_SOCKET（非空）→
- * $XDG_RUNTIME_DIR/revohuman/live.sock（该变量本身是目录且可写可进入）→ /tmp/revohuman-<uid>/live.sock。
- * 前两级是「非自有路径」：所在目录必须已存在，库不建、不查属主、不改权限；后两级是「自有路径」：
- * 目录按 0700 建，必须属于当前用户且不是符号链接。socket 文件 0600。绝对路径 ≥ 104 字节报错。
+ * Socket path resolution (server side): explicit socket_path → $REVOHUMAN_LIVE_SOCKET (non-empty) →
+ * $XDG_RUNTIME_DIR/revohuman/live.sock (when that variable is itself a directory that is writable and searchable) →
+ * /tmp/revohuman-<uid>/live.sock.
+ * The first two are "foreign paths": their directory must already exist, and the library does not create it, check its
+ * owner or change its permissions; the last two are "own paths": the directory is created with mode 0700 and must belong
+ * to the current user and not be a symlink. The socket file is 0600. Absolute paths of ≥ 104 bytes are an error.
  *
- * 错误：不在 RevoHuman 异常树上，rh_last_error_code() 一律 1000。
- *   RH_ERR_BUSY（类名 LiveSocketBusy）：路径上有活的监听者；探测连接超时（1.0 s）或得到
- *     ECONNREFUSED / ENOENT 以外的错误；检测与 bind 之间被抢（EADDRINUSE）。这些情况都**不删**文件。
- *   RH_ERR_IO（类名 LiveSocketError）：路径上是非 socket 文件；非自有目录不存在；自有目录属主不符
- *     或是符号链接；bind 其它错误。
- *   RH_ERR_INVALID_ARG（类名 LiveSocketError）：路径过长。
- *   探测得 ECONNREFUSED / ENOENT 的是上次残留的死 socket，会被删掉后继续。 */
+ * Errors: outside the RevoHuman exception tree; rh_last_error_code() is always 1000.
+ *   RH_ERR_BUSY (class name LiveSocketBusy): there is a live listener on the path; the test connection timed out
+ *     (1.0 s) or got an error other than ECONNREFUSED / ENOENT; the path was taken between the check and bind
+ *     (EADDRINUSE). In none of these cases is the file **deleted**.
+ *   RH_ERR_IO (class name LiveSocketError): a non-socket file at the path; a foreign directory does not exist; an own
+ *     directory has the wrong owner or is a symlink; other bind errors.
+ *   RH_ERR_INVALID_ARG (class name LiveSocketError): path too long.
+ *   A test connection that gets ECONNREFUSED / ENOENT means a dead socket left over from last time; it is deleted and
+ *   the start continues. */
 
 typedef int32_t RhLiveTrackerSource;
 enum {
-    RH_LIVE_TRACKER_KIT      = 0,  /* 默认：用 rh_kit_tracker(kit)，没有就不广播位姿 */
-    RH_LIVE_TRACKER_EXTERNAL = 1,  /* 用 tracker 字段给的会话（借用，须比广播活得久）；
-                                      本期 C SDK 未实现，rh_live_start 一律 RH_ERR_UNSUPPORTED，
-                                      不读 tracker 字段（tracker 模块另行落地） */
-    RH_LIVE_TRACKER_NONE     = 2,  /* 不广播位姿，hello.tracker.reason 写 tracker_reason */
+    RH_LIVE_TRACKER_KIT      = 0,  /* default: use rh_kit_tracker(kit); if there is none, no poses are broadcast */
+    RH_LIVE_TRACKER_EXTERNAL = 1,  /* use the session given in the tracker field (borrowed, must outlive the broadcast);
+                                      not implemented in this version of the C SDK: rh_live_start always returns RH_ERR_UNSUPPORTED and
+                                      does not read the tracker field (the tracker module will come separately) */
+    RH_LIVE_TRACKER_NONE     = 2,  /* no poses are broadcast; hello.tracker.reason is set to tracker_reason */
 };
 
 typedef struct RhLiveOptions {
     uint32_t            struct_size;
-    uint32_t            queue_size;      /* 默认 256（每客户端） */
-    const char         *socket_path;     /* NULL = 按上面的顺序解析 */
-    RhLiveTrackerSource tracker_source;  /* 默认 KIT */
-    uint32_t            backlog;         /* 默认 8 */
-    RhTracker          *tracker;         /* 仅 tracker_source == EXTERNAL 时用 */
-    const char         *tracker_reason;  /* NULL / "" = 按 Python 兜底：型号带 tracker → "tracker not opened"，
-                                            否则 "none (product has no tracker)"。原因文本照 Python 原文发 */
-    const char         *tracker_gate;    /* NULL → hello.tracker.gate 为 null；否则 "flag" / "error" */
-    double              send_timeout_s;  /* 默认 2.0 */
-    double              pose_poll_hz;    /* 默认 250；本期收下但不起 pose_loop 线程，不生效（tracker 模块另行落地） */
-    double              status_period_s; /* 默认 1.0 */
+    uint32_t            queue_size;      /* default 256 (per client) */
+    const char         *socket_path;     /* NULL = resolve in the order above */
+    RhLiveTrackerSource tracker_source;  /* default KIT */
+    uint32_t            backlog;         /* default 8 */
+    RhTracker          *tracker;         /* used only when tracker_source == EXTERNAL */
+    const char         *tracker_reason;  /* NULL / "" = Python's fallback: the model has a tracker → "tracker not opened", otherwise
+                                            "none (product has no tracker)". The reason text is sent exactly as in Python */
+    const char         *tracker_gate;    /* NULL → hello.tracker.gate is null; otherwise "flag" / "error" */
+    double              send_timeout_s;  /* default 2.0 */
+    double              pose_poll_hz;    /* default 250; accepted in this version, but no pose_loop thread is started, so it has no
+                                            effect (the tracker module will come separately) */
+    double              status_period_s; /* default 1.0 */
 } RhLiveOptions;
 
-/* Python Broadcaster.stats()。 */
+/* Python Broadcaster.stats(). */
 typedef struct RhLiveStats {
     uint32_t struct_size;
-    uint32_t clients;                    /* 当前订阅方数 */
-    uint64_t published;                  /* 已编码发出的消息条数（hello 不计） */
-    uint64_t poses;                      /* 已广播的 pose 条数；本期恒为 0（不起 pose_loop 线程，tracker 模块另行落地） */
-    uint64_t dropped;                    /* **当前在连**订阅方因队列满丢掉的条数之和（已断开的不计，同 Python） */
-    uint64_t frames[2];                  /* [0] 左 / [1] 右：已广播的 glove 帧数；没开这只手为 0 */
-    uint8_t  hand_open[2];               /* 这只手在广播里 */
+    uint32_t clients;                    /* current number of subscribers */
+    uint64_t published;                  /* messages encoded and sent (hello not counted) */
+    uint64_t poses;                      /* pose messages broadcast; always 0 in this version (no pose_loop thread is started; the
+                                            tracker module will come separately) */
+    uint64_t dropped;                    /* total messages dropped on full queues by the **currently connected** subscribers
+                                            (disconnected ones not counted, same as Python) */
+    uint64_t frames[2];                  /* [0] left / [1] right: glove frames broadcast; 0 if this hand is not open */
+    uint8_t  hand_open[2];               /* this hand is in the broadcast */
     uint8_t  _reserved[6];
 } RhLiveStats;
 
 RH_API void     rh_live_options_init(RhLiveOptions *opts);
-/* 只做占用检测（bind 前那一步），供 CLI / 示例在打开手套之前先查。path 为 NULL 时按默认顺序解析。
- * 返回 RH_OK / RH_ERR_BUSY / RH_ERR_IO，与 rh_live_start 同一张错误表；会删掉残留的死 socket。 */
+/* Only the occupancy check (the step before bind), so that a CLI / example can check it before opening the gloves. When
+ * path is NULL it is resolved in the default order.
+ * Returns RH_OK / RH_ERR_BUSY / RH_ERR_IO, with the same error table as rh_live_start; deletes a leftover dead socket. */
 RH_API RhStatus rh_live_check_socket_free(const char *path);
 RH_API RhStatus rh_live_start(RhKit *kit, const RhLiveOptions *opts, RhLiveServer **out);
-/* 关闭顺序：先删自己建的 socket 文件（只删 inode 相同的那个）→ 关监听 → 给每个客户端排一条 bye{reason}
- * → 每个客户端最多等 1.0 s，发不完的强断（收不到 bye）。reason 为 NULL → "closed"（同 Python close()）；
- * 命令行程序退出时传 "sdk exit"。不关 kit。幂等。 */
+/* Close order: delete the socket file it created (only the one with the same inode) → close the listener → queue one
+ * bye{reason} for each client → wait at most 1.0 s per client and force-disconnect any that have not finished (they do
+ * not get bye). reason NULL → "closed" (same as Python close()); pass "sdk exit" when a command-line program exits.
+ * Does not close the kit. Idempotent. */
 RH_API void     rh_live_stop(RhLiveServer *server, const char *reason);
 RH_API uint32_t rh_live_client_count(const RhLiveServer *server);
 RH_API RhStatus rh_live_stats(const RhLiveServer *server, RhLiveStats *out);
 RH_API int32_t  rh_live_stats_json(const RhLiveServer *server, char *buf, size_t buf_len);  /* == stats() */
-/* 实际使用的绝对路径（按 cwd 做纯字符串规整，不解析符号链接）。 */
+/* The absolute path actually used (normalized as a plain string against cwd; symlinks are not resolved). */
 RH_API int32_t  rh_live_socket_path(const RhLiveServer *server, char *buf, size_t buf_len);
-/* 同 Python default_socket_path()：环境变量**原样**返回、不绝对化。 */
+/* Same as Python default_socket_path(): the environment variable is returned **verbatim**, not made absolute. */
 RH_API int32_t  rh_live_default_socket_path(char *buf, size_t buf_len);
 
-/* ───────────────────────────── tracker（占位） ───────────────────────────── */
+/* ───────────────────────────── tracker (placeholder) ───────────────────────────── */
 
-/* 第一期范围：读已存标定 + 位姿流 + 世界系变化事件；不执行标定、不写任何标定文件。
- * 被别的进程占着 → RH_ERR_BUSY（E1900）。以下仅占位，字段以 tracker 节定稿为准。 */
+/* Scope of the first version: reading stored calibration + pose stream + world frame change events; no calibration is
+ * run and no calibration file is written.
+ * Held by another process → RH_ERR_BUSY (E1900). What follows is only a placeholder; the fields will follow the final
+ * tracker section. */
 typedef struct RhTrackerPose {
     uint32_t struct_size;
     uint32_t _reserved;
     char     role[16];                   /* "left" / "right" / … */
     char     serial[RH_SERIAL_MAX];
-    double   p[3];                       /* m，tracker 世界系 */
+    double   p[3];                       /* m, tracker world frame */
     double   q[4];                       /* w, x, y, z */
     int64_t  sample_wall_ns;
     int64_t  sample_mono_ns;

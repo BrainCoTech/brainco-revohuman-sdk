@@ -1,25 +1,36 @@
 /*
- * RevoHuman SDK — 手部正运动学与 tracker→palm_link 名义外参（C API）
+ * RevoHuman SDK — hand forward kinematics and nominal tracker→palm_link extrinsics (C API)
  *
- * 与 Python 包 `revohuman` 的 hand_fk 对拍：模型常量逐位相同，位姿有限值绝对差 ≤ 1e-12。
+ * Cross-checked against hand_fk of the Python package `revohuman`: model constants are bit-identical, and finite pose
+ * values differ by at most 1e-12 in absolute terms.
  *
- * 暂放独立头文件，revohuman.h 定稿时并入（届时本文件只剩一行 #include）。
+ * Kept in a separate header for now; it will be merged into revohuman.h when that is finalized (this file will then
+ * contain only an #include).
  *
- * ── 约定 ────────────────────────────────────────────────────────────────────
- * 1. 位姿 = (p 米, r 3×3 行主序)，r[3*i + j] 是第 i 行第 j 列；第 j 列 = 该 link 第 j 根轴在参考系中的方向。
- * 2. 全部是纯函数：不加锁、不分配，可在任意线程并发调用；失败只写线程局部 last_error，输出一个字节都不写。
- * 3. 手别只认 RH_HAND_LEFT / RH_HAND_RIGHT；RH_HAND_UNKNOWN 与越界值 → RH_ERR_INVALID_ARG（码 1000）。
- * 4. 非有限关节角按 NaN 算：第 i 个 link 的姿态与全部后代为 NaN，第 i 个 link 的原点照常有值。
- *    FK 不读 joints_valid_mask；要让无效关节传播 NaN，调用方先把对应 q 置 NaN。
- * 5. rh_hand_fk / rh_hand_model_fk 只覆盖关节表里 21 个子 link；带指尖与 palm_link 坐标原点的 27 点见 rh_hand_points
- *    （只有指定型号入口），指尖长度见 rh_hand_model_info。OpenXR 关节布局不在 SDK 里，归调用方。
- * 6. 型号：本期带 DV1 与 P 两套模型常量。不带型号参数的入口（rh_hand_model_sha256 / rh_hand_link_name /
- *    rh_hand_tracker_mount / rh_hand_fk / rh_palm_from_tracker）本期固定按 DV1 算；要用 P 只能走带
- *    RhHandModel 参数的 rh_hand_model_* 入口。不带型号参数的入口下一期改指 P，新代码请直接用显式入口。
- * 7. palm_link 坐标原点是 URDF 的 CAD 装配基准点：在手背那一层、手背板近端之外，不在任何关节或网格上，
- *    也不是解剖学上的掌根或腕关节中心。{hand}_tracker_link 的原点 = tracker 原始位姿（TrackerPose）的原点，
- *    在 tracker 底面 1/4" 螺孔轴上。两个型号的 palm_link 坐标原点相对 tracker 在同一处（P 的已在模型文件里
- *    对齐到 DV1），所以 rh_hand_model_palm_from_tracker 与 rh_hand_points 的点 26 两个型号逐位相同。
+ * ── Conventions ─────────────────────────────────────────────────────────────
+ * 1. Pose = (p in meters, r 3×3 row-major); r[3*i + j] is row i, column j; column j = direction of the link's j-th
+ *    axis in the reference frame.
+ * 2. All functions are pure: no locking, no allocation, safe to call concurrently from any thread; on failure only the
+ *    thread-local last_error is written, and not a single byte of output.
+ * 3. Handedness accepts only RH_HAND_LEFT / RH_HAND_RIGHT; RH_HAND_UNKNOWN and out-of-range values →
+ *    RH_ERR_INVALID_ARG (code 1000).
+ * 4. Non-finite joint angles count as NaN: the orientation of link i and all of its descendants is NaN, while the
+ *    origin of link i still has a value. FK does not read joints_valid_mask; to propagate NaN for invalid joints, the
+ *    caller sets the corresponding q to NaN first.
+ * 5. rh_hand_fk / rh_hand_model_fk cover only the 21 child links of the joint table; for the 27 points including the
+ *    fingertips and the palm_link origin see rh_hand_points (model-specific entry points only); for fingertip lengths
+ *    see rh_hand_model_info. The OpenXR joint layout is not part of the SDK and is up to the caller.
+ * 6. Models: this version carries two sets of model constants, RH_HAND_MODEL_DV1 (PTV1 glove) and RH_HAND_MODEL_P
+ *    (P1 glove). The entry points without a model parameter (rh_hand_model_sha256 / rh_hand_link_name /
+ *    rh_hand_tracker_mount / rh_hand_fk / rh_palm_from_tracker) always use RH_HAND_MODEL_DV1 in this version; for
+ *    RH_HAND_MODEL_P use the rh_hand_model_* entry points that take an RhHandModel. The entry points without a model
+ *    parameter will switch to RH_HAND_MODEL_P in the next version, so new code should use the explicit ones.
+ * 7. The palm_link origin is the CAD assembly reference point of the URDF: on the back-of-hand layer, beyond the
+ *    proximal end of the back plate; it is not on any joint or mesh, and it is not the anatomical palm base or wrist
+ *    joint center. The origin of {hand}_tracker_link = the origin of the raw tracker pose (TrackerPose), on the axis of
+ *    the 1/4" screw hole on the tracker's bottom face. The palm_link origin of both models is at the same place relative
+ *    to the tracker (the P1 model file is already aligned to PTV1), so rh_hand_model_palm_from_tracker and point 26 of
+ *    rh_hand_points are bit-identical for both models.
  */
 #ifndef REVOHUMAN_FK_H
 #define REVOHUMAN_FK_H
@@ -30,219 +41,251 @@
 extern "C" {
 #endif
 
-/* 数组元素的值类型，冻结为 POD、永不扩展，所以不带 struct_size（不适用头文件约定 struct_size 那条）。 */
+/* Value type of array elements, frozen as POD and never extended, so it has no struct_size (the struct_size convention
+ * of the header does not apply). */
 typedef struct RhLinkPose {
-    double p[3];   /* 米 */
-    double r[9];   /* 3×3 行主序，r[3*i+j]；第 j 列 = 该 link 第 j 根轴 */
+    double p[3];   /* meters */
+    double r[9];   /* 3×3 row-major, r[3*i+j]; column j = the link's j-th axis */
 } RhLinkPose;
 
-/* 模型指纹，64 位小写十六进制，同 Python hand_fk.MODEL_SHA256。静态存储，不必释放。 */
+/* Model fingerprint, 64 lowercase hex digits, same as Python hand_fk.MODEL_SHA256. Static storage, do not free. */
 RH_API const char *rh_hand_model_sha256(void);
 
-/* 第 index 个关节的子 link 名（如 "left_index_MPR_Link"；两个型号相同）；返回值约定同 rh_joint_name：
- * 成功返回所需长度（不含 NUL），buf_len > 0 时总写入以 NUL 结尾的（可能截断的）内容；失败返回负的 RhStatus。 */
+/* Child link name of joint index (e.g. "left_index_MPR_Link"; the same for both models); return value convention as
+ * for rh_joint_name: on success returns the required length (excluding NUL), and when buf_len > 0 always writes
+ * NUL-terminated (possibly truncated) content; on failure returns a negative RhStatus. */
 RH_API int32_t  rh_hand_link_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
 
-/* tracker link 在 palm_link 系中的位姿（常量，姿态为单位阵）。 */
+/* Pose of the tracker link in the palm_link frame (constant, identity orientation). */
 RH_API RhStatus rh_hand_tracker_mount(RhHand hand, RhLinkPose *out);
 
-/* 21 个关节角（rad，URDF 关节正方向，顺序 = 关节表下标）→ 21 个子 link 的位姿。
- * base 为 NULL → palm_link 系；否则逐条 base ∘ 结果（base 不做任何检查，非有限值按 IEEE 传播）。
- * base 可以指向 out 数组内部：实现先拷走 *base 再写 out。 */
+/* 21 joint angles (rad, positive URDF joint direction, order = joint table index) → poses of the 21 child links.
+ * base NULL → palm_link frame; otherwise base ∘ result for each entry (base is not checked at all; non-finite values
+ * propagate per IEEE). base may point into the out array: the implementation copies *base before writing out. */
 RH_API RhStatus rh_hand_fk(RhHand hand, const double q_rad[RH_JOINT_COUNT],
                            const RhLinkPose *base, RhLinkPose out[RH_JOINT_COUNT]);
 
-/* tracker 原始位姿 → palm_link 在同一参考系中的名义位姿（按模型装配关系，没有逐只手套标定）。
- * p = RhTrackerPose.p，q_wxyz = RhTrackerPose.q（不必归一）。
- * √(w²+x²+y²+z²) 非有限或 < 1e-12 → 结果 12 个数全为 NaN；p 不检查，非有限分量按 IEEE 传播。 */
+/* Raw tracker pose → nominal palm_link pose in the same reference frame (from the model's assembly relation, with no
+ * per-glove calibration). p = RhTrackerPose.p, q_wxyz = RhTrackerPose.q (need not be normalized).
+ * √(w²+x²+y²+z²) non-finite or < 1e-12 → all 12 numbers of the result are NaN; p is not checked, non-finite
+ * components propagate per IEEE. */
 RH_API RhStatus rh_palm_from_tracker(RhHand hand, const double p[3], const double q_wxyz[4],
                                      RhLinkPose *out);
 
-/* out = base ∘ local（p = p_b + R_b·p_l，R = R_b·R_l）；out 可与 base 或 local 同址。 */
+/* out = base ∘ local (p = p_b + R_b·p_l, R = R_b·R_l); out may alias base or local. */
 RH_API RhStatus rh_pose_compose(const RhLinkPose *base, const RhLinkPose *local, RhLinkPose *out);
 
-/* ── 指定型号的入口 ──────────────────────────────────────────────────────────
- * 型号只认下面两个值；0 与其它值 → RH_ERR_INVALID_ARG（码 1000），输出不写。 */
+/* ── Model-specific entry points ─────────────────────────────────────────────
+ * Only the two values below are accepted as a model; 0 and any other value → RH_ERR_INVALID_ARG (code 1000), output
+ * not written. RH_HAND_MODEL_DV1 = PTV1 glove, RH_HAND_MODEL_P = P1 glove. */
 typedef int32_t RhHandModel;
 enum { RH_HAND_MODEL_DV1 = 1, RH_HAND_MODEL_P = 2 };
 
-/* 产品型号（RhProductIdentity.variant_code / RhHandReport.variant，"P1" / "PTV1"）→ 手部几何型号（RhHandModel）。
- * 固定映射，不读硬件、不依赖 identify：P1 → RH_HAND_MODEL_P，PTV1 → RH_HAND_MODEL_DV1。
- * variant_code 为 NULL、out 为 NULL、或认不出（含 "auto"、空串、大小写/空白差异之外的任何其它串）
- * → RH_ERR_INVALID_ARG（码 1000），*out 不写。不存在「默认型号」回退：认不出就是认不出，不会落到 DV1。 */
+/* Product model (RhProductIdentity.variant_code / RhHandReport.variant, "P1" / "PTV1") → hand geometry model
+ * (RhHandModel). Fixed mapping that reads no hardware and does not depend on identify: P1 → RH_HAND_MODEL_P,
+ * PTV1 → RH_HAND_MODEL_DV1. variant_code NULL, out NULL, or not recognized (including "auto", the empty string, and
+ * any other string beyond case / whitespace differences) → RH_ERR_INVALID_ARG (code 1000), *out not written. There is
+ * no "default model" fallback: an unrecognized code stays unrecognized and never falls back to RH_HAND_MODEL_DV1. */
 RH_API RhStatus rh_variant_hand_model(const char *variant_code, RhHandModel *out);
 
-/* 型号元数据（出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandModelInfo)）。 */
+/* Model metadata (output; set struct_size before the call, RH_STRUCT_INIT(RhHandModelInfo) recommended). */
 typedef struct RhHandModelInfo {
     uint32_t    struct_size;
     RhHandModel model;
     char        name[16];            /* "dv1" / "p" */
-    char        urdf_sha256[65];     /* 64 位小写十六进制 + NUL */
-    uint32_t    points_version;      /* 该型号点集（rh_hand_points）的契约版本 = RH_HAND_POINTS_VERSION；0 = 库未提供点集 */
-    double      tip_length_m[5];     /* 指尖 TIP 到 DIP link 原点的距离，米；顺序食、中、无名、小、拇；两只手相同 */
-    char        tip_source[48];      /* 指尖常量的来源说明，如 "dip-mesh@ea8e2e3a"，NUL 结尾 */
+    char        urdf_sha256[65];     /* 64 lowercase hex digits + NUL */
+    uint32_t    points_version;      /* contract version of this model's point set (rh_hand_points) = RH_HAND_POINTS_VERSION; 0 = the
+                                        library provides no point set */
+    double      tip_length_m[5];     /* distance from fingertip TIP to the DIP link origin, meters; order index, middle, ring, little,
+                                        thumb; the same for both hands */
+    char        tip_source[48];      /* description of where the fingertip constants come from, e.g. "dip-mesh@ea8e2e3a", NUL-terminated */
 } RhHandModelInfo;
 
 RH_API RhStatus rh_hand_model_info(RhHandModel model, RhHandModelInfo *out);
 
-/* 语义与 rh_hand_fk / rh_palm_from_tracker 完全相同，只是模型常量按 model 取。
- * 旧入口等价于显式给本期默认型号（约定 6），结果逐位相同。 */
+/* Same semantics as rh_hand_fk / rh_palm_from_tracker, except that the model constants are taken from model.
+ * The entry points without a model parameter are equivalent to explicitly passing this version's default model
+ * (convention 6), with bit-identical results. */
 RH_API RhStatus rh_hand_model_fk(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
                                  const RhLinkPose *base, RhLinkPose out[RH_JOINT_COUNT]);
 RH_API RhStatus rh_hand_model_palm_from_tracker(RhHandModel model, RhHand hand, const double p[3],
                                                 const double q_wxyz[4], RhLinkPose *out);
 
-/* ── 手内点集 ───────────────────────────────────────────────────────────────
- * 27 个点在 {hand}_tracker_link 系中的位姿。tracker_link 是模型里挂在 palm_link 下的固定坐标系（palm_link 系里是 (t, I)，
- * t = rh_hand_model_palm_from_tracker 用的同一个挂载平移），算这些点用不到任何 tracker 数据。点序：
- *   0–20   关节 i 的子 link，下标与 rh_hand_model_fk 的输出相同
- *   21–25  指尖，食、中、无名、小、拇（{hand}_{finger}_TIP，挂在该指 DIP link 上）
- *   26     palm_link 坐标原点（{hand}_palm_link），恒有效
- * 有效位按拓扑推、不看结果的浮点值：关节 i 有效 ⇔ joints_valid_mask 第 i 位为 1 且 q_i 有限（只读低 21 位）。
- * 点 i 的位置有效 ⇔ i 的全部祖先关节有效（不含 i 自己）；朝向有效 ⇔ i 与全部祖先都有效；
- * 指尖的位置与朝向都 ⇔ 它那根 DIP 的朝向有效。无效的量整个写 NaN（位置 3 个、朝向 9 个），
- * 所以「掩码位为 1 ⇔ 该量全有限」恒成立。点集只有指定型号入口，没有旧入口。 */
+/* ── Hand point set ──────────────────────────────────────────────────────────
+ * Poses of 27 points in the {hand}_tracker_link frame. tracker_link is a fixed frame under palm_link in the model
+ * ((t, I) in the palm_link frame, t = the same mount translation used by rh_hand_model_palm_from_tracker); computing
+ * these points needs no tracker data at all. Point order:
+ *   0–20   child link of joint i, same index as the output of rh_hand_model_fk
+ *   21–25  fingertips: index, middle, ring, little, thumb ({hand}_{finger}_TIP, attached to that finger's DIP link)
+ *   26     palm_link origin ({hand}_palm_link), always valid
+ * Validity bits follow the topology, not the floating-point values of the result: joint i is valid ⇔ bit i of
+ * joints_valid_mask is 1 and q_i is finite (only the low 21 bits are read).
+ * Position of point i valid ⇔ all ancestor joints of i are valid (excluding i itself); orientation valid ⇔ i and all
+ * ancestors are valid; a fingertip's position and orientation are both valid ⇔ the orientation of its DIP is valid.
+ * An invalid quantity is written entirely as NaN (3 for position, 9 for orientation), so "mask bit is 1 ⇔ the quantity
+ * is all finite" always holds. The point set has model-specific entry points only, no entry point without a model. */
 #define RH_HAND_POINT_COUNT    27
-#define RH_HAND_POINTS_VERSION 1   /* = Python hand_fk.POINTS_VERSION；点序、根、指尖规则、有效性规则任一项变就加一 */
+#define RH_HAND_POINTS_VERSION 1   /* = Python hand_fk.POINTS_VERSION; +1 whenever point order, root, fingertip rule or validity
+                                      rule changes */
 
-/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandPoints)。 */
+/* Output; set struct_size before the call, RH_STRUCT_INIT(RhHandPoints) recommended. */
 typedef struct RhHandPoints {
     uint32_t     struct_size;
     uint32_t     points_version;          /* = RH_HAND_POINTS_VERSION */
-    RhHandModel  model;                   /* 调用方给的型号 */
+    RhHandModel  model;                   /* the model given by the caller */
     RhHand       hand;
-    uint64_t     seq;                     /* 抄自 RhGloveFrame.seq；rh_hand_points 写 0 */
-    uint32_t     generation;              /* 抄自 RhGloveFrame.generation；rh_hand_points 写 0 */
-    uint32_t     position_valid_mask;     /* bit i：points[i].p 有效；bit 27–31 恒 0 */
-    uint32_t     orientation_valid_mask;  /* bit i：points[i].r 有效；bit 27–31 恒 0 */
-    RhFrameFlags frame_flags;             /* 抄自 RhGloveFrame.flags；rh_hand_points 写 0 */
-    int64_t      sample_wall_ns;          /* 抄自 RhGloveFrame；有效与否看 frame_flags & RH_FRAME_FLAG_HAS_SAMPLE_TIME */
-    int64_t      sample_mono_ns;          /* 同上 */
+    uint64_t     seq;                     /* copied from RhGloveFrame.seq; rh_hand_points writes 0 */
+    uint32_t     generation;              /* copied from RhGloveFrame.generation; rh_hand_points writes 0 */
+    uint32_t     position_valid_mask;     /* bit i: points[i].p valid; bits 27–31 always 0 */
+    uint32_t     orientation_valid_mask;  /* bit i: points[i].r valid; bits 27–31 always 0 */
+    RhFrameFlags frame_flags;             /* copied from RhGloveFrame.flags; rh_hand_points writes 0 */
+    int64_t      sample_wall_ns;          /* copied from RhGloveFrame; valid if frame_flags & RH_FRAME_FLAG_HAS_SAMPLE_TIME */
+    int64_t      sample_mono_ns;          /* same as above */
     RhLinkPose   points[RH_HAND_POINT_COUNT];
 } RhHandPoints;
 
-/* 21 个关节角（rad，顺序 = 关节表下标）+ 关节有效位 → 27 点。
- * 型号、手别不认识或指针为 NULL、out->struct_size 太小 → RH_ERR_INVALID_ARG，不写输出。
- * 纯函数、无跨调用状态；q_rad 可以指向 out 内部（实现先拷走 q 再写 out）。 */
+/* 21 joint angles (rad, order = joint table index) + joint validity bits → 27 points.
+ * Unknown model or handedness, NULL pointer, or out->struct_size too small → RH_ERR_INVALID_ARG, output not written.
+ * Pure function with no state across calls; q_rad may point into out (the implementation copies q before writing out). */
 RH_API RhStatus rh_hand_points(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
                                uint32_t joints_valid_mask, RhHandPoints *out);
 
-/* = rh_joints_to_radians(product_code, frame->joints_deg, q) 再
- *   rh_hand_points(model, frame->hand, q, frame->joints_valid_mask, out)，结果逐位相同；
- * 然后原样抄帧的 seq / generation / flags / sample_wall_ns / sample_mono_ns（不判不改）。
- * 不缓存上一帧、不补帧、不判帧新旧，过期与否由调用方按 seq 与采样时间判。
- * frame->hand 不是 LEFT / RIGHT（裸连时为 UNKNOWN）→ RH_ERR_INVALID_ARG，不写输出。 */
+/* = rh_joints_to_radians(product_code, frame->joints_deg, q) followed by
+ *   rh_hand_points(model, frame->hand, q, frame->joints_valid_mask, out), with bit-identical results;
+ * then the frame's seq / generation / flags / sample_wall_ns / sample_mono_ns are copied as-is (not checked or changed).
+ * It does not cache the previous frame, fill in frames or judge whether a frame is fresh; staleness is up to the caller,
+ * based on seq and sampling time. frame->hand not LEFT / RIGHT (UNKNOWN when connected without a hand) →
+ * RH_ERR_INVALID_ARG, output not written. */
 RH_API RhStatus rh_hand_points_from_frame(RhHandModel model, const char *product_code,
                                           const RhGloveFrame *frame, RhHandPoints *out);
 
-/* 第 index 个点的名字（如 "left_index_TIP"；两个型号相同，故不带型号）。返回值约定同 rh_hand_link_name；
- * 手别不是 LEFT / RIGHT、index ≥ RH_HAND_POINT_COUNT → 负的 RhStatus。 */
+/* Name of point index (e.g. "left_index_TIP"; the same for both models, hence no model parameter). Return value
+ * convention as for rh_hand_link_name; handedness not LEFT / RIGHT, or index ≥ RH_HAND_POINT_COUNT → negative
+ * RhStatus. */
 RH_API int32_t  rh_hand_point_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
 
-/* ── 指根点 ─────────────────────────────────────────────────────────────────
- * 食、中、无名、小指 MCP 关节的名义中心在 {hand}_tracker_link 系中的位姿，拇指没有。点序：0–3 = 食、中、无名、小。
- * rh_hand_points 里该指 MPR / MCP link（点 4k+3 / 4k+2）的原点在手背外骨架那一层，不在手指里；指根点在 MPR link 系里
- * 沿固定方向 d_k 往掌侧 s_k 米处，并刚性挂在 MCP link 上，随手指屈伸一起转：
- *   设 P = rh_hand_points 同一组输入下的点 4k+2，c_k = s_k·d_k − (MCP 关节在 MPR link 系里的原点)，
- *   则位置 = P.p + P.r·c_k，朝向 = P.r。
- * d_k、s_k 是两个型号共用的名义常量（右手 d_k 的 Y 取反），不是逐只手套的标定值。
- * 有效位：第 k 个点的位置与朝向都 ⇔ rh_hand_points 点 4k+2 的朝向位（该指 MPR 与 MCP 两个关节都有效）；
- * 无效的量整个写 NaN，所以「掩码位为 1 ⇔ 该量全有限」恒成立。 */
+/* ── Knuckle points ──────────────────────────────────────────────────────────
+ * Poses of the nominal centers of the index, middle, ring and little finger MCP joints in the {hand}_tracker_link
+ * frame; the thumb has none. Point order: 0–3 = index, middle, ring, little.
+ * In rh_hand_points, the origins of that finger's MPR / MCP links (points 4k+3 / 4k+2) are on the back-of-hand
+ * exoskeleton layer, not inside the finger; the knuckle point lies s_k meters toward the palm side along a fixed
+ * direction d_k in the MPR link frame, and is rigidly attached to the MCP link, rotating with finger flexion:
+ *   with P = point 4k+2 of rh_hand_points for the same inputs and c_k = s_k·d_k − (MCP joint origin in the MPR link
+ *   frame), position = P.p + P.r·c_k and orientation = P.r.
+ * d_k and s_k are nominal constants shared by both models (the Y of d_k is negated for the right hand), not per-glove
+ * calibration values.
+ * Validity: position and orientation of point k are both valid ⇔ the orientation bit of point 4k+2 of rh_hand_points
+ * (both the MPR and MCP joints of that finger are valid); an invalid quantity is written entirely as NaN, so "mask bit
+ * is 1 ⇔ the quantity is all finite" always holds. */
 #define RH_HAND_KNUCKLE_COUNT    4
-#define RH_HAND_KNUCKLES_VERSION 1   /* 点序、位置规则、常量、有效性规则任一项变就加一 */
+#define RH_HAND_KNUCKLES_VERSION 1   /* +1 whenever point order, position rule, constants or validity rule changes */
 
-/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandKnuckles)。 */
+/* Output; set struct_size before the call, RH_STRUCT_INIT(RhHandKnuckles) recommended. */
 typedef struct RhHandKnuckles {
     uint32_t     struct_size;
     uint32_t     knuckles_version;        /* = RH_HAND_KNUCKLES_VERSION */
-    RhHandModel  model;                   /* 调用方给的型号 */
+    RhHandModel  model;                   /* the model given by the caller */
     RhHand       hand;
-    uint32_t     position_valid_mask;     /* bit k：points[k].p 有效；bit 4–31 恒 0 */
-    uint32_t     orientation_valid_mask;  /* bit k：points[k].r 有效；与上一项恒相等；bit 4–31 恒 0 */
+    uint32_t     position_valid_mask;     /* bit k: points[k].p valid; bits 4–31 always 0 */
+    uint32_t     orientation_valid_mask;  /* bit k: points[k].r valid; always equal to the previous field; bits 4–31 always 0 */
     RhLinkPose   points[RH_HAND_KNUCKLE_COUNT];
 } RhHandKnuckles;
 
-/* 入参与 rh_hand_points 相同，错误次序也相同：型号、手别不认识或指针为 NULL、out->struct_size 太小
- * → RH_ERR_INVALID_ARG，不写输出。纯函数、无跨调用状态；q_rad 可以指向 out 内部（实现先拷走 q 再写 out）。 */
+/* Same inputs as rh_hand_points, with the same error order: unknown model or handedness, NULL pointer, or
+ * out->struct_size too small → RH_ERR_INVALID_ARG, output not written. Pure function with no state across calls; q_rad
+ * may point into out (the implementation copies q before writing out). */
 RH_API RhStatus rh_hand_knuckles(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
                                  uint32_t joints_valid_mask, RhHandKnuckles *out);
 
-/* ── 手部关键点 ─────────────────────────────────────────────────────────────
- * 人手 22 个关键点的名义位置，在 {hand}_tracker_link 系中：手指里的关节中心与指尖，外加腕点与掌心。
- * rh_hand_points 的点是外骨架 link 的原点，在手背那一层；关键点按名义常量挪进手指，同 rh_hand_knuckles，
- * 不是逐只手套的标定值。点只给位置：手指朝向随消费方的骨架约定而定，由调用方取 rh_hand_points 的 link 朝向
- * 自己定；另给一个掌心系 palm_r（掌面朝向是手套的名义事实）：Z 是掌心法向、指向掌面外侧，X 指向中指，Y = Z × X。
- * 常量按型号建表；没有表的型号 → RH_ERR_UNSUPPORTED（码 1202）。
- * 轴向约定（所有型号都满足，新型号接入时由 SDK 统一）：palm_link 与各手指 link 的 −X 指向手背。
- * 点序（常见的 21 点手部关键点，掌心放最后）：0 腕点；1–4 拇指 CMC / MCP / IP / TIP；
- *   5–8 食指 MCP / PIP / DIP / TIP；9–12 中指；13–16 无名指；17–20 小指；21 掌心。
- * 设 P = rh_hand_points 同一组输入下的点集，p_i = P.points[i].p、R_i = P.points[i].r，x̂ = (1, 0, 0)，
- * 名义方向右手 Y 取反：
- *   腕点 = p_26 + (R_26·x̂)·w；掌心 = (R_26·x̂)·a（tracker_link 原点沿 palm_link +X）；
- *   四指 MCP = rh_hand_knuckles 同一组输入下的点位（逐位相同）；
- *   四指 k 的 PIP / DIP / TIP = p_{4k+1} / p_{4k} / p_{21+k} + (R_{4k+3}·e_k)·s_k（e_k 在 MPR link 系）；
- *   拇指 CMC = p_20 + (R_19·x̂)·c；拇指 MCP / IP / TIP = p_17 / p_16 / p_25 + (R_19·e_4)·s_4（e_4 在 CMR link 系）。
- * 腕点在中、无名指 MCP 的深度上，是名义参考点，不是解剖学的腕关节中心。
- * 有效位：所用的 P 的位置与朝向都有效才有效（腕点、掌心、palm_r 恒有效）；无效的点三个分量都写 NaN，
- * 所以「掩码位为 1 ⇔ 该点全有限」恒成立。 */
+/* ── Hand keypoints ──────────────────────────────────────────────────────────
+ * Nominal positions of 22 human hand keypoints in the {hand}_tracker_link frame: joint centers and tips inside the
+ * fingers, plus a wrist point and the palm center.
+ * The points of rh_hand_points are exoskeleton link origins on the back-of-hand layer; keypoints are moved into the
+ * fingers by nominal constants, as in rh_hand_knuckles, and are not per-glove calibration values. Only positions are
+ * given: finger orientations depend on the consumer's skeleton convention, so the caller derives them from the link
+ * orientations of rh_hand_points; in addition a palm frame palm_r is given (the palm-facing direction is a nominal fact
+ * of the glove): Z is the palm normal pointing out of the palm surface, X points toward the middle finger, Y = Z × X.
+ * The constants are tabulated per model; a model without a table → RH_ERR_UNSUPPORTED (code 1202).
+ * Axis convention (met by every model; the SDK normalizes new models to it): −X of palm_link and of every finger link
+ * points toward the back of the hand.
+ * Point order (the common 21 hand keypoints, with the palm center last): 0 wrist; 1–4 thumb CMC / MCP / IP / TIP;
+ *   5–8 index MCP / PIP / DIP / TIP; 9–12 middle; 13–16 ring; 17–20 little; 21 palm center.
+ * With P = the point set of rh_hand_points for the same inputs, p_i = P.points[i].p, R_i = P.points[i].r,
+ * x̂ = (1, 0, 0), and the Y of nominal directions negated for the right hand:
+ *   wrist = p_26 + (R_26·x̂)·w; palm center = (R_26·x̂)·a (tracker_link origin along palm_link +X);
+ *   MCP of the four fingers = the knuckle points of rh_hand_knuckles for the same inputs (bit-identical);
+ *   PIP / DIP / TIP of finger k = p_{4k+1} / p_{4k} / p_{21+k} + (R_{4k+3}·e_k)·s_k (e_k in the MPR link frame);
+ *   thumb CMC = p_20 + (R_19·x̂)·c; thumb MCP / IP / TIP = p_17 / p_16 / p_25 + (R_19·e_4)·s_4 (e_4 in the CMR link
+ *   frame).
+ * The wrist point is at the depth of the middle and ring finger MCPs; it is a nominal reference point, not the
+ * anatomical wrist joint center.
+ * Validity: a point is valid only if position and orientation of every P it uses are valid (wrist, palm center and
+ * palm_r are always valid); all three components of an invalid point are written as NaN, so "mask bit is 1 ⇔ the
+ * point is all finite" always holds. */
 #define RH_HAND_KEYPOINT_COUNT    22
-#define RH_HAND_KEYPOINTS_VERSION 1   /* 点序、位置规则、常量、有效性规则任一项变就加一 */
+#define RH_HAND_KEYPOINTS_VERSION 1   /* +1 whenever point order, position rule, constants or validity rule changes */
 
-/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhHandKeypoints)。 */
+/* Output; set struct_size before the call, RH_STRUCT_INIT(RhHandKeypoints) recommended. */
 typedef struct RhHandKeypoints {
     uint32_t     struct_size;
     uint32_t     keypoints_version;       /* = RH_HAND_KEYPOINTS_VERSION */
-    RhHandModel  model;                   /* 调用方给的型号 */
+    RhHandModel  model;                   /* the model given by the caller */
     RhHand       hand;
-    uint32_t     valid_mask;              /* bit k：points[k] 有效；bit 22–31 恒 0 */
-    uint32_t     reserved;                /* 恒 0 */
+    uint32_t     valid_mask;              /* bit k: points[k] valid; bits 22–31 always 0 */
+    uint32_t     reserved;                /* always 0 */
     double       points[RH_HAND_KEYPOINT_COUNT][3];
-    double       palm_r[9];               /* 掌心系在 tracker_link 中的朝向，行主序，列为 X / Y / Z 轴 */
+    double       palm_r[9];               /* orientation of the palm frame in tracker_link, row-major, columns = X / Y / Z axes */
 } RhHandKeypoints;
 
-/* 入参与 rh_hand_points 相同，错误次序也相同：型号、手别不认识或指针为 NULL、out->struct_size 太小
- * → RH_ERR_INVALID_ARG；型号没有关键点表 → RH_ERR_UNSUPPORTED；都不写输出。纯函数、无跨调用状态；
- * q_rad 可以指向 out 内部（实现先拷走 q 再写 out）。 */
+/* Same inputs as rh_hand_points, with the same error order: unknown model or handedness, NULL pointer, or
+ * out->struct_size too small → RH_ERR_INVALID_ARG; model without a keypoint table → RH_ERR_UNSUPPORTED; output not
+ * written in either case. Pure function with no state across calls; q_rad may point into out (the implementation copies
+ * q before writing out). */
 RH_API RhStatus rh_hand_keypoints(RhHandModel model, RhHand hand, const double q_rad[RH_JOINT_COUNT],
                                   uint32_t joints_valid_mask, RhHandKeypoints *out);
 
-/* 第 index 个关键点的名字（如 "left_index_pip"，两个型号相同）。返回值约定同 rh_hand_link_name；
- * 手别不是 LEFT / RIGHT、index ≥ RH_HAND_KEYPOINT_COUNT → 负的 RhStatus。 */
+/* Name of keypoint index (e.g. "left_index_pip", the same for both models). Return value convention as for
+ * rh_hand_link_name; handedness not LEFT / RIGHT, or index ≥ RH_HAND_KEYPOINT_COUNT → negative RhStatus. */
 RH_API int32_t  rh_hand_keypoint_name(RhHand hand, uint32_t index, char *buf, size_t buf_len);
 
-/* ── 触觉点布局 ─────────────────────────────────────────────────────────────
- * 触觉帧 RhTactile.values 的第 i 个值来自哪个点：贴在哪个 link 上，在该 link 系里的位置与外法向。
- * 设 L = rh_hand_model_fk 输出的第 taxels[i].link 个位姿，则点位 = L.p + L.r·p，外法向 = L.r·n
- * （base 为 NULL 时在 palm_link 系，给 base 时在 base 系）。数据随库编译，不读文件。
- * 只有 DV1（PTV1 手套，TYPE_B 241 点）有布局；P 型号不带触觉。
- * 不是逐台标定值：阵列按 2.5 mm 行列距铺到套环/套帽掌侧的外表面再外抬 1.2 mm；外法向是套环/套帽网格上
- * 离该点最近的点指向该点的单位方向（最近点在某个面内部时就是该面法向）。 */
-#define RH_TAXEL_LAYOUT_VERSION 1   /* 点序、位置来源、法向取法任一项变就加一 */
+/* ── Tactile point layout ────────────────────────────────────────────────────
+ * Which point the i-th value of a tactile frame's RhTactile.values comes from: which link it is attached to, and its
+ * position and outward normal in that link's frame.
+ * With L = pose number taxels[i].link of the rh_hand_model_fk output, point = L.p + L.r·p and outward normal = L.r·n
+ * (in the palm_link frame when base is NULL, in the base frame when base is given). The data is compiled into the
+ * library; no files are read.
+ * Only RH_HAND_MODEL_DV1 (PTV1 glove, TYPE_B, 241 points) has a layout; RH_HAND_MODEL_P (P1 glove) has no tactile.
+ * Not per-unit calibration values: the array is laid out with 2.5 mm row and column pitch on the outer palm-side surface
+ * of the finger rings / caps and then raised 1.2 mm outward; the outward normal is the unit direction from the nearest
+ * point on the ring / cap mesh to the point (the face normal when that nearest point lies inside a face). */
+#define RH_TAXEL_LAYOUT_VERSION 1   /* +1 whenever point order, position source or normal rule changes */
 
-/* 数组元素的值类型，冻结为 POD、永不扩展，不带 struct_size。 */
+/* Value type of array elements, frozen as POD and never extended, no struct_size. */
 typedef struct RhTaxel {
-    double   p[3];       /* link 系位置，米 */
-    double   n[3];       /* link 系外法向，单位向量 */
-    uint32_t link;       /* = rh_hand_model_fk 输出下标（0–20） */
-    uint32_t reserved;   /* 恒 0 */
+    double   p[3];       /* position in the link frame, meters */
+    double   n[3];       /* outward normal in the link frame, unit vector */
+    uint32_t link;       /* = output index of rh_hand_model_fk (0–20) */
+    uint32_t reserved;   /* always 0 */
 } RhTaxel;
 
-/* 出参，调用前置 struct_size，推荐 RH_STRUCT_INIT(RhTaxelLayout)。约 19 KB，别在小栈线程上放局部变量。 */
+/* Output; set struct_size before the call, RH_STRUCT_INIT(RhTaxelLayout) recommended. About 19 KB: do not put it as a
+ * local variable on a thread with a small stack. */
 typedef struct RhTaxelLayout {
     uint32_t    struct_size;
     uint32_t    layout_version;                  /* = RH_TAXEL_LAYOUT_VERSION */
-    RhHandModel model;                           /* 调用方给的型号 */
+    RhHandModel model;                           /* the model given by the caller */
     RhHand      hand;
-    uint32_t    count;                           /* = 调用方给的 point_count */
-    char        source[48];                      /* 来源说明，如 "cuff-surface-v2@6e5d1fa"，NUL 结尾 */
-    RhTaxel     taxels[RH_TACTILE_MAX_POINTS];   /* 下标 = RhTactile.values 下标；count 之后全 0 */
+    uint32_t    count;                           /* = the point_count given by the caller */
+    char        source[48];                      /* description of the source, e.g. "cuff-surface-v2@6e5d1fa", NUL-terminated */
+    RhTaxel     taxels[RH_TACTILE_MAX_POINTS];   /* index = RhTactile.values index; all zero after count */
 } RhTaxelLayout;
 
-/* point_count 给触觉帧的 RhTactile.point_count。
- * 型号、手别不认识，out 为 NULL 或 struct_size 太小，point_count 为 0 或 > RH_TACTILE_MAX_POINTS
- *   → RH_ERR_INVALID_ARG；
- * 型号不带触觉（P），或该型号没有这个点数的布局（DV1 只有 241）→ RH_ERR_UNSUPPORTED（错误码 1800）。
- * 失败不写输出。纯函数，可并发调用。 */
+/* Pass the tactile frame's RhTactile.point_count as point_count.
+ * Unknown model or handedness, out NULL or struct_size too small, point_count 0 or > RH_TACTILE_MAX_POINTS
+ *   → RH_ERR_INVALID_ARG;
+ * the model has no tactile (RH_HAND_MODEL_P, P1 glove), or the model has no layout for this point count
+ * (RH_HAND_MODEL_DV1, PTV1 glove: 241 points only) → RH_ERR_UNSUPPORTED (error code 1800).
+ * Output not written on failure. Pure function, safe to call concurrently. */
 RH_API RhStatus rh_hand_model_taxel_layout(RhHandModel model, RhHand hand, uint32_t point_count,
                                            RhTaxelLayout *out);
 

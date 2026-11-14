@@ -1,83 +1,90 @@
 # RevoHuman C SDK
 
-RevoHuman 数据手套的 C 语言库：连接手套，读取每手 21 个关节角与全指触觉，并在库内算手部正向运动学（FK）
-和每个触觉点在手上的位置与朝向。
-接口是 C99，C++ 可以直接包含。适合不带 Python 运行时的程序和嵌入式设备。
+C library for RevoHuman data gloves: connects to the gloves, reads the 21 joint angles and full-finger tactile data of
+each hand, and computes hand forward kinematics (FK) and the position and orientation of every tactile point on the hand
+inside the library.
+The interface is C99 and can be included from C++ as-is. It suits programs without a Python runtime and embedded devices.
 
-Tracker 位姿、腕部相机、MCAP 录制和 ROS 2 节点请用 Python SDK，见本仓库 [main 分支](https://github.com/BrainCoTech/brainco-revohuman-sdk/tree/main)。
-两者的错误码逐值相同，C 库的本机广播可以直接接 Python SDK 的查看器。
+For tracker poses, wrist cameras, MCAP recording and ROS 2 nodes, use the Python SDK on the
+[main branch](https://github.com/BrainCoTech/brainco-revohuman-sdk/tree/main) of this repository.
+The two share identical error code values, and the local broadcast of the C library can feed the Python SDK's viewer
+directly.
 
-这里只放公开头文件、最小示例和许可证。库以二进制包发布，不含源码。
+This branch holds only the public headers, a minimal example and the license. The library ships as binary packages,
+without source code.
 
 ```
-LICENSE                     Apache-2.0 许可证全文
-include/revohuman.h         手套、触觉、双手配对、套件接口
-include/revohuman_fk.h      手部正向运动学、触觉点布局
-example/                    不接手套就能跑的最小示例
+LICENSE                     full text of the Apache-2.0 license
+include/revohuman.h         glove, tactile, two-hand pairing and kit interfaces
+include/revohuman_fk.h      hand forward kinematics, tactile point layout
+example/                    minimal example that runs without a glove
 ```
 
-全部接口与约定写在两个头文件的注释里。
+All interfaces and conventions are documented in the comments of the two headers.
 
 ---
 
-## 支持的硬件与系统
+## Supported hardware and systems
 
-| 项 | 要求 |
+| Item | Requirement |
 |---|---|
-| 手套 | RevoHuman P1 或 PTV1，左右手各一只，USB 接主机 |
-| 架构 | x86_64 / aarch64 |
-| 系统 | Linux，glibc ≥ 2.34，libstdc++ 提供 GLIBCXX ≥ 3.4.30（Ubuntu 22.04 及以上满足） |
-| 权限 | 运行用户要有串口权限（通常是加入 `dialout` 组） |
+| Gloves | RevoHuman P1 or PTV1, one left and one right, connected to the host over USB |
+| Architecture | x86_64 / aarch64 |
+| System | Linux, glibc ≥ 2.34, libstdc++ providing GLIBCXX ≥ 3.4.30 (met by Ubuntu 22.04 and later) |
+| Permissions | The user running the program needs access to the serial port (usually by being in the `dialout` group) |
 
-## 下载与校验
+## Download and verification
 
-发布文件在 [GitHub Release c-sdk-v0.1.3](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.3) 下载：
+Download the release files from
+[GitHub Release c-sdk-v0.1.3](https://github.com/BrainCoTech/brainco-revohuman-sdk/releases/tag/c-sdk-v0.1.3):
 
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| `revohuman-c-sdk-0.1.3-linux-x86_64.tar.gz` | x86_64 二进制包 |
-| `revohuman-c-sdk-0.1.3-linux-aarch64.tar.gz` | aarch64 二进制包 |
-| `SHA256SUMS` | 校验和 |
+| `revohuman-c-sdk-0.1.3-linux-x86_64.tar.gz` | x86_64 binary package |
+| `revohuman-c-sdk-0.1.3-linux-aarch64.tar.gz` | aarch64 binary package |
+| `SHA256SUMS` | checksums |
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf revohuman-c-sdk-0.1.3-linux-$(uname -m).tar.gz
 ```
 
-解压出的目录下文中记作 `<SDK>`，可以放在任意位置。包内的 `README.md` 列出了全部文件，`SHA256SUMS` 可以逐文件校验，
-`BUILDINFO.txt` 记录了构建来源。
+Below, the extracted directory is called `<SDK>`; it can be placed anywhere. The `README.md` inside the package lists
+every file, `SHA256SUMS` verifies each file, and `BUILDINFO.txt` records the build provenance.
 
-## 用法
+## Usage
 
-**CMake 工程**
+**CMake projects**
 
 ```cmake
 find_package(revohuman 0.1 CONFIG REQUIRED)
-target_link_libraries(app PRIVATE revohuman::revohuman)          # 动态库
-# 或 target_link_libraries(app PRIVATE revohuman::revohuman_static)  # 静态库
+target_link_libraries(app PRIVATE revohuman::revohuman)          # shared library
+# or target_link_libraries(app PRIVATE revohuman::revohuman_static)  # static library
 ```
 
-配置时传 `-DCMAKE_PREFIX_PATH=<SDK>`。0.x 版本按次版本号兼容：`find_package(revohuman 0.1)` 只接受 0.1.y。
-纯 C 工程用静态库时不用自己加 `-lstdc++`，包配置会自动补上。
+Pass `-DCMAKE_PREFIX_PATH=<SDK>` when configuring. 0.x versions are compatible by minor version:
+`find_package(revohuman 0.1)` only accepts 0.1.y. Plain C projects using the static library do not need to add
+`-lstdc++` themselves; the package configuration adds it.
 
-**不用 CMake**
+**Without CMake**
 
 ```bash
 cc  app.c   -I<SDK>/include -L<SDK>/lib -lrevohuman
 c++ app.cpp -I<SDK>/include -L<SDK>/lib -lrevohuman
 ```
 
-**运行时找动态库**
+**Finding the shared library at run time**
 
-链接动态库的程序，运行前执行：
+For programs linked against the shared library, run this before starting them:
 
 ```bash
 export LD_LIBRARY_PATH=<SDK>/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 ```
 
-或者把 `librevohuman.so*` 拷到程序旁边，链接时加 `-Wl,-rpath,'$ORIGIN'`。链接静态库的程序不需要这一步。
+Or copy `librevohuman.so*` next to the program and link with `-Wl,-rpath,'$ORIGIN'`. Programs linked against the static
+library do not need this step.
 
-## 先跑一下示例
+## Try the example
 
 ```bash
 cmake -S example -B /tmp/rh_example -DCMAKE_PREFIX_PATH=<SDK>
@@ -86,9 +93,10 @@ LD_LIBRARY_PATH=<SDK>/lib /tmp/rh_example/rh_info
 /tmp/rh_example/rh_info_static
 ```
 
-两个程序都会打印版本号、手部模型指纹，以及全零关节角下关节表最后一个 link 的位置，退出码为 0。
-二进制包里的 `share/revohuman/example/` 是同一份示例。
+Both programs print the version, the hand model fingerprint and the position of the last link in the joint table for
+all-zero joint angles, and exit with code 0.
+`share/revohuman/example/` in the binary package is the same example.
 
-## 许可证
+## License
 
-Apache-2.0，见 [LICENSE](LICENSE)。
+Apache-2.0, see [LICENSE](LICENSE).
