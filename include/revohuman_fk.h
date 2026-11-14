@@ -234,7 +234,7 @@ typedef struct RhTaxelLayout {
     RhHandModel model;                           /* 调用方给的型号 */
     RhHand      hand;
     uint32_t    count;                           /* = 调用方给的 point_count */
-    char        source[48];                      /* 来源说明，如 "cuff-surface-v2@4e7da46"，NUL 结尾 */
+    char        source[48];                      /* 来源说明，如 "cuff-surface-v2@6e5d1fa"，NUL 结尾 */
     RhTaxel     taxels[RH_TACTILE_MAX_POINTS];   /* 下标 = RhTactile.values 下标；count 之后全 0 */
 } RhTaxelLayout;
 
