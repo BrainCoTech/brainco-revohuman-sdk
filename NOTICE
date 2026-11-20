@@ -1,0 +1,13 @@
+RevoHuman SDK
+Copyright 2026 BrainCo
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+The license covers the whole release: the source files, the documentation,
+the hand models, and the prebuilt binaries (the revohuman wheels).
+
+Third-party components
+----------------------
+
+pysurvive (Python bindings of libsurvive) is distributed as a separate wheel
+alongside this SDK, built from libsurvive with modifications. It is licensed
+under the MIT License; the license text is included inside that wheel.

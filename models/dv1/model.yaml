@@ -1,0 +1,53 @@
+numeric_id: 1
+c_enum: RH_HAND_MODEL_DV1
+product: PTV1
+version: DV3
+urdf: {file: urdf/dv3_bimanual_palm_description_aligned_standalone.urdf, sha256: 7da4878f98a22c700fb9166b37519b5eb6bcb139af18b46b4dd9923660d7701b}
+palm_axes: {dorsal: -x, distal: +z}
+source: urdf_new/ptv @ 2026-11-14
+tactile:
+- {count: 241, layout: dv1}
+wrist_cameras:
+  uvc_3080:
+    source: calibrated
+    from: 一副手套实测（标定板，2026-11-17）
+    optical_inplane_deg: 270
+    upright_transform: {left: rotate_180, right: flip_vertical}
+    left:
+      parent: left_palm_link
+      child: left_camera_Link
+      xyz: [0.052521, 0.046304, 0.051408]
+      rpy: [0.519467, 0.141760, 0.041783]
+    right:
+      parent: right_palm_link
+      child: right_camera_Link
+      xyz: [0.049429, -0.049924, 0.050096]
+      rpy: [-0.561506, 0.081547, -0.033369]
+    intrinsics:
+      from: 一副手套实测（标定板，2026-11-16）
+      left:
+        width: 640
+        height: 480
+        distortion_model: rational_polynomial
+        k: [337.9587631, 0, 330.9440004, 0, 338.2614035, 276.3895815, 0, 0, 1]
+        d: [-0.3741384834, 0.5229124692, 0.0009436378366, -0.0007071720761, 0.03287274536, -0.3057564078, 0.3865779389, 0.1039991836]
+        calibration_id: f8e009c40e04b888
+        image_transform: rotate_180
+        rms_px: 0.10561676323413849
+        calibrated_at: "2026-11-16T06:26:29-05:00"
+        focus_automatic_continuous: 0
+        focus_absolute: 0
+        board: {inner_cols: 11, inner_rows: 8, square_mm: 15.0}
+      right:
+        width: 640
+        height: 480
+        distortion_model: rational_polynomial
+        k: [340.2210904, 0, 322.3417755, 0, 340.4755763, 262.2139717, 0, 0, 1]
+        d: [-0.5764701976, 0.9294106908, -0.0004031468759, -0.001325013545, -0.1908427059, -0.5109699082, 0.7941763757, -0.1212949099]
+        calibration_id: af8a937cf494901c
+        image_transform: flip_vertical
+        rms_px: 0.0918533056974411
+        calibrated_at: "2026-11-16T06:26:32-05:00"
+        focus_automatic_continuous: 0
+        focus_absolute: 0
+        board: {inner_cols: 11, inner_rows: 8, square_mm: 15.0}

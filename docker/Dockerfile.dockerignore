@@ -1,0 +1,7 @@
+# Only these file types in the build context (the directory holding the release files) are sent to Docker;
+# the unpacked source bundle, the visualization environment .venv, recording data, etc. are never sent,
+# so the build is faster and the image picks up no unrelated files.
+*
+!SHA256SUMS
+!*.whl
+!*-bundle.tar.gz

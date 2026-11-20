@@ -1,0 +1,7 @@
+numeric_id: 2
+c_enum: RH_HAND_MODEL_P
+product: P1
+version: DV3
+urdf: {file: urdf/dv3_bimanual_description_aligned_standalone.urdf, sha256: 63960181839d5486cc0952bf7a4a5c09b6e9eca78fa4035294a74e13cef32805}
+palm_axes: {dorsal: -x, distal: +z}
+source: urdf_new/p @ 2026-11-14

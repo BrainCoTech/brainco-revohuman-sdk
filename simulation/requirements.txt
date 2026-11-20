@@ -1,0 +1,8 @@
+# All dependencies of the glove visualization (simulation/). The visualization only subscribes to the SDK's
+# local broadcast; the SDK itself does not need to be installed.
+# mujoco is limited to the version range tested before release, consistent with install_venv.sh and
+# pyproject.toml (viewer)
+mujoco>=3.1,<3.13
+glfw>=2.6
+numpy>=1.26
+PyYAML>=5.4
