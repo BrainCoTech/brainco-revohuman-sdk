@@ -98,7 +98,7 @@ typedef struct RhHandModelInfo {
                                         library provides no point set */
     double      tip_length_m[5];     /* distance from fingertip TIP to the DIP link origin, meters; order index, middle, ring, little,
                                         thumb; the same for both hands */
-    char        tip_source[48];      /* description of where the fingertip constants come from, e.g. "dip-mesh@ea8e2e3a", NUL-terminated */
+    char        tip_source[48];      /* description of where the fingertip constants come from, e.g. "dip-mesh@21deef1b", NUL-terminated */
 } RhHandModelInfo;
 
 RH_API RhStatus rh_hand_model_info(RhHandModel model, RhHandModelInfo *out);
@@ -255,10 +255,10 @@ RH_API int32_t  rh_hand_keypoint_name(RhHand hand, uint32_t index, char *buf, si
  * (in the palm_link frame when base is NULL, in the base frame when base is given). The data is compiled into the
  * library; no files are read.
  * Only RH_HAND_MODEL_DV1 (PTV1 glove, TYPE_B, 241 points) has a layout; RH_HAND_MODEL_P (P1 glove) has no tactile.
- * Not per-unit calibration values: the array is laid out with 2.5 mm row and column pitch on the outer palm-side surface
- * of the finger rings / caps and then raised 1.2 mm outward; the outward normal is the unit direction from the nearest
- * point on the ring / cap mesh to the point (the face normal when that nearest point lies inside a face). */
-#define RH_TAXEL_LAYOUT_VERSION 1   /* +1 whenever point order, position source or normal rule changes */
+ * Not per-unit calibration values: the positions are the taxel centers given by the hand CAD model (on the outer surface of
+ * the finger covers) and the normals are the outward normals given by the same CAD model. Layout version 1 (earlier
+ * releases) instead fitted the array onto the ring / cap meshes and took the normal from the nearest mesh point. */
+#define RH_TAXEL_LAYOUT_VERSION 2   /* +1 whenever point order, position source or normal rule changes */
 
 /* Value type of array elements, frozen as POD and never extended, no struct_size. */
 typedef struct RhTaxel {
@@ -276,7 +276,7 @@ typedef struct RhTaxelLayout {
     RhHandModel model;                           /* the model given by the caller */
     RhHand      hand;
     uint32_t    count;                           /* = the point_count given by the caller */
-    char        source[48];                      /* description of the source, e.g. "cuff-surface-v2@6e5d1fa", NUL-terminated */
+    char        source[48];                      /* description of the source, e.g. "cad-provided@1c093b3", NUL-terminated */
     RhTaxel     taxels[RH_TACTILE_MAX_POINTS];   /* index = RhTactile.values index; all zero after count */
 } RhTaxelLayout;
 
