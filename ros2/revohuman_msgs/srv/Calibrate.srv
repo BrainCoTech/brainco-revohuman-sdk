@@ -1,0 +1,6 @@
+# Encoder calibration (manually triggered, runs in a maintenance window, the stream pauses briefly).
+# target: encoder index, 255 = all.
+uint8 target
+---
+bool success
+string message

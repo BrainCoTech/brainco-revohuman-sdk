@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>revohuman_ros</name>
+  <version>0.1.4</version>
+  <description>Thin ROS2 wrapper around the RevoHuman glove SDK: glove_node (single hand) / bimanual_node (two hands merged). Exposes only data topics and four manually triggered services; Tracker poses are published from the same node (enabled with the tracker_mode parameter); the wrist camera, as optional hardware, is likewise embedded in the node (enabled with the camera_mode parameter, default off).</description>
+  <maintainer email="devnull@example.com">RevoHuman</maintainer>
+  <license>Apache-2.0</license>
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>revohuman_msgs</depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

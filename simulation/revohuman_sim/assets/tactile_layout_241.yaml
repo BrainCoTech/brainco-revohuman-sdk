@@ -1,0 +1,202 @@
+# 241-taxel tactile (TYPE_B) → Cartesian layout contract on the hand model (for visualization in simulation/)
+#
+# Source: the grids were entered cell by cell from the tactile point map (one 8-column grid + point numbers
+#       per finger); the SDK index offsets match the firmware point order; the point map has no physical
+#       coordinates.
+#       On the physical hardware, each finger segment's tactile array is attached to the palmar surface of the
+#       ring (MCP/PIP, a C-shaped shell open on the dorsal side) / cap (DIP, a closed dome), so the 3D
+#       positions = a ring/cap fitted to the finger-segment mesh, then laid out along the surface by
+#       row/column pitch (placement.method: cuff_surface); for visualization only, not calibration values;
+#       the 2.5 mm row/column pitch is an estimate.
+#
+# Two kinds of content, with entirely different freedom to change:
+#   fingers.*.rows / zones / sdk_offset — **the contract aligned with the firmware point order**.
+#       rows[y] lists the column numbers X (0..7) that have points in row y (Y0 = the fingertip row); point
+#       numbers increase row-major 1..N, matching the numbers printed on the point map;
+#       SDK index = finger start index (sdk_offset) + point number − 1.
+#       Start index / point count of the five fingers: thumb 0 / 57, index 57 / 49, middle 106 / 49,
+#       ring 155 / 49, little 204 / 37.
+#       Changing them breaks the match with the hardware; do not "tidy them up in passing".
+#   placement — only how the grid is laid onto the finger-segment surfaces (the adjustable half).
+version: 2
+vendor: TYPE_B
+wire_version: 1
+point_count: 241
+columns: 8            # horizontal point-map columns X0..X7
+
+fingers:
+  thumb:
+    sdk_offset: 0
+    count: 57
+    rows:                # Y0 (fingertip) → Y10 (finger base)
+      - [3, 4]           # Y0:  1  2
+      - [3, 4]           # Y1:  3  4
+      - [0, 4, 7]        # Y2:  5  6  7
+      - [0, 4, 7]        # Y3:  8  9 10
+      - [0, 4]           # Y4: 11 12
+      - [0, 1, 4, 6, 7]  # Y5: 13 14 15 16 17
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y6: 18..25
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y7: 26..33   (fingertip zone ends here: 33 points)
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y8: 34..41   finger base
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y9: 42..49
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y10: 50..57
+    zones:               # row range (inclusive, rows indices) → finger-segment URDF link
+                         # (without the {hand}_ prefix)
+      - {name: tip,  rows: [0, 7],  link: thumb_DIP_Link, count: 33}   # fingertip = distal phalanx
+      - {name: root, rows: [8, 10], link: thumb_PIP_Link, count: 24}   # finger base = proximal phalanx
+                                                                       # (thumb_PIP_Link is 45mm long in z,
+                                                                       # DIP joint at 39.4mm)
+
+  index:
+    sdk_offset: 57
+    count: 49
+    rows:
+      - [2, 3]           # Y0:  1  2
+      - [2, 3]           # Y1:  3  4
+      - [3]              # Y2:  5
+      - [0, 3, 6]        # Y3:  6  7  8
+      - [0, 3, 6]        # Y4:  9 10 11
+      - [3, 6]           # Y5: 12 13
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y6: 14..21   (fingertip zone ends here: 21 points)
+      - [0, 1, 2, 3, 4, 5]         # Y7: 22..27   mid finger
+      - [0, 1, 2, 3, 4, 5]         # Y8: 28..33
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y9: 34..41   finger base
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y10: 42..49
+    zones:
+      - {name: tip,  rows: [0, 6],  link: index_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: index_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: index_MCP_Link, count: 16}
+
+  middle:              # point map identical to the index finger
+    sdk_offset: 106
+    count: 49
+    rows:
+      - [2, 3]
+      - [2, 3]
+      - [3]
+      - [0, 3, 6]
+      - [0, 3, 6]
+      - [3, 6]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+    zones:
+      - {name: tip,  rows: [0, 6],  link: middle_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: middle_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: middle_MCP_Link, count: 16}
+
+  ring:                # point map identical to the index finger
+    sdk_offset: 155
+    count: 49
+    rows:
+      - [2, 3]
+      - [2, 3]
+      - [3]
+      - [0, 3, 6]
+      - [0, 3, 6]
+      - [3, 6]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+      - [0, 1, 2, 3, 4, 5, 6, 7]
+    zones:
+      - {name: tip,  rows: [0, 6],  link: ring_DIP_Link, count: 21}
+      - {name: mid,  rows: [7, 8],  link: ring_PIP_Link, count: 12}
+      - {name: root, rows: [9, 10], link: ring_MCP_Link, count: 16}
+
+  little:
+    sdk_offset: 204
+    count: 37
+    rows:
+      - [2, 3]           # Y0:  1  2
+      - [3]              # Y1:  3
+      - [0, 3, 5]        # Y2:  4  5  6
+      - [0, 3, 5]        # Y3:  7  8  9
+      - [3, 5]           # Y4: 10 11
+      - [0, 1, 2, 3, 4, 5, 6, 7]   # Y5: 12..19   (fingertip zone ends here: 19 points)
+      - [0, 1, 2, 3, 4, 5]         # Y6: 20..25   mid finger
+      - [0, 1, 2, 3, 4, 5]         # Y7: 26..31   finger base
+      - [0, 1, 2, 3, 4, 5]         # Y8: 32..37
+    zones:
+      - {name: tip,  rows: [0, 5],  link: little_DIP_Link, count: 19}
+      - {name: mid,  rows: [6, 6],  link: little_PIP_Link, count: 6}
+      - {name: root, rows: [7, 8],  link: little_MCP_Link, count: 12}
+
+# How the grid is laid onto the finger segments (adjustable). All coordinates are in the finger-segment link
+# frame: +z points to the fingertip, y spans across the finger, +x is the palmar face
+# (in the right-hand URDF the tracker is mounted on the −x face = back of the hand; y of the four fingers'
+# MPR: index +32mm … little −35mm).
+# The finger segments of the bundled hand models have simplified shapes with no ring/cap and cannot be fitted:
+# a placement table fitted from this table on finger-segment meshes that have the rings/caps is bundled
+# alongside, tactile_placement_241.json (local coordinates in each finger-segment link frame). Once the
+# content of this table changes, that table no longer matches and is not used; it must be regenerated on
+# meshes that have the rings/caps.
+placement:             # placement method (simulation/revohuman_sim/tactile_layout.py PlacedLayout;
+                       # changes here do not affect the point-order contract)
+  method: cuff_surface       # fit a ring/cap to each finger-segment mesh, take the surface contour row by row
+                             # with rays, lay out the columns by arc length
+  columns_x0_side: ulnar     # point-map X0 on the ulnar side (radial mirrors it)
+  row_pitch_mm: 2.5          # row pitch (along the phalanx / along the meridian arc length) — estimate,
+                             # not verified against the physical hardware
+  column_pitch_mm: 2.5       # column pitch (along the surface arc length) — estimate
+  lift_mm: 1.2               # height the points are lifted off the surface (for drawing spheres)
+  sphere_radius_mm: 1.2       # reference radius of the selected-point marker
+  fit:                       # ring/cap fitting (mm / degrees), see fit_cuff
+    samples: 50000           # number of surface sample points
+    seed: 0
+    slice_mm: 1.0            # slice thickness along the axis
+    min_slice_samples: 80
+    inlier_mm: 0.8           # RANSAC inlier distance
+    radius_range_mm: [4.0, 16.0]
+    min_coverage_deg: 150    # a slice counts as a circular cross-section only if it covers at least this
+                             # angle (C-shaped outer wall ≈ 300°)
+    good_coverage_deg: 270   # axis/center estimation uses only slices with coverage angle ≥ this value
+    radius_step_mm: 2.5      # radius jump tolerance between adjacent slices (inner wall ↔ outer wall
+                             # ≈ wall thickness)
+    center_step_mm: 3.5      # center jump tolerance between adjacent slices
+    gap_mm: 3.0              # gap allowed within a chain
+    min_slices: 4
+    max_tilt_deg: {ring: 35, cap: 30}   # max tilt of the refitted axis relative to the phalanx direction
+                                        # (MCP ring measured at 14–24°)
+    outer_percentile: 95     # outer-wall radius = this percentile of the off-axis distance within the
+                             # wall-thickness band
+    extent_step_mm: 0.5      # true wall extent along the axis: the RANSAC chain is only the starting point,
+                             # then it is extended toward both ends by wall-band sample density
+    extent_reach_mm: 4.0     #   extend outward by at most this much
+    extent_frac: 0.5         #   stop once the density drops below this fraction of the in-chain median
+                             #   (hinge lugs/the base do not reach half)
+  ring:
+    max_wrap_deg: 100        # azimuth range ± of the ray sweep
+    hit_margin_mm: 3.0       # upper bound on hit distance = outer-wall radius + this value
+                             # (blocks the hinge lugs)
+  cap:
+    apex_rho_mm: 2.5         # fingertip row 0 is placed at the latitude where the local radius along the
+                             # meridian shrinks to this value (≈ column pitch: the 3 top-row points span the
+                             # fingertip; any smaller and the columns circle the axis center)
+    max_wrap_deg: 100
+    hit_margin_mm: 3.0
+  overrides:                 # per-link overrides,
+                             #   e.g. {index_PIP_Link: {phi_offset_deg: 5, row_offset_mm: -1}}
+                             #   overridable: row_pitch_mm / column_pitch_mm / lift_mm
+                             #   / phi_offset_deg (positive = rotate toward the ulnar side)
+                             #   / row_offset_mm (positive = shift toward the fingertip) / apex_rho_mm
+    # The whole thumb fingertip array is shifted 4.5mm toward the finger base. Without the shift, Y0..Y7 all
+    #   land on the cap dome, and the 10.65mm cylindrical stretch on the base side of the finger segment
+    #   (9.5mm of meridian, 33% of the 29.2mm meridian) has no points at all, so contact at the base of the
+    #   finger segment cannot be displayed.
+    #   The same blank on the other four fingers is only 4.6-5.3mm (21-23%) — the thumb is the only outlier:
+    #   its 29.2mm meridian is much longer than the other fingers' 19.7-22.6mm, yet it has only one more row
+    #   (8 rows × 2.5mm = 17.5mm span), so it cannot cover it.
+    #   -4.5 brings the base-side blank down to 5.0mm, matching the other four fingers in absolute terms
+    #   (6.7mm is left on the fingertip side; the band around the apex is deliberately left empty —
+    #   Y0 has only 2 columns and could not cover the dome anyway). Exact centering is -3.65 (5.85/5.85).
+    thumb_DIP_Link: {row_offset_mm: -4.5}
+
+# Heatmap color-scale range (adjustable): scale=0 means automatic (peak hold, slow decay)
+value:
+  auto_scale_floor: 200.0  # mN; lower bound of the automatic range, so that small readings of a few mN
+                           # near zero do not paint the whole hand red
+  auto_scale_decay: 0.995  # decay factor per rendered frame

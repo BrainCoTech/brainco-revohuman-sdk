@@ -1,0 +1,193 @@
+# Base parameter file for revohuman_bringup: `revohuman.launch.py` loads this one by default.
+#
+# The `/**` wildcard applies to all nodes; **parameters a node does not declare are silently ignored
+# by rclpy**, so the single-hand and two-hand blocks can live together (`pair_mode` is unused by
+# glove_node, and vice versa).
+#
+# ⚠️ Types must match the type of the node's `declare_parameter` default: writing `rate_hz` as `200`
+# instead of `200.0` raises InvalidParameterTypeException at declaration time, and the node simply fails
+# to start.
+#
+# The values here are the node defaults, copied so that "what can be tuned" has a visible list;
+# editing this file = changing the defaults on this machine. For a one-off change use the command line:
+# `... rate_hz:=100.0` (the command line overrides this file).
+/**:
+  ros__parameters:
+
+    # ── Glove ───────────────────────────────────────────────────
+    # Left and right hands are identified by the handedness stored in the MCU firmware; older gloves
+    # whose firmware has none stored use the L/R handedness character of the serial number. For a glove
+    # whose handedness cannot be identified, give the serial port explicitly with the node parameter port
+    # (single hand) / left_port, right_port (two hands). These three are not launch parameters: write them
+    # into this file (or another params_file), or pass them with `ros2 run … --ros-args -p`
+    # Publish rate (Hz). Unrelated to the SDK sampling rate; this only decides how fast data is published
+    # to ROS
+    rate_hz: 200.0
+    # auto = create ~/tactile if the product model has tactile; off = never create it. There is no on setting
+    publish_tactile: "auto"
+    # true = refuse to start without tactile. The default minimum capture unit is "encoder + tracker";
+    # tactile is optional
+    require_tactile: false
+    # Switch for the calibration services that write to the device. When false (default), ~/calibrate and
+    # ~/clear_calibration **do not exist at all**: a call is not rejected, the service simply is not there,
+    # so rosbridge has nothing to forward to a browser either.
+    # Calibration writes the current posture as the zero pose; a wrong one can only be fixed by
+    # recalibrating, and the cost of an accidental trigger (joint angles offset for the whole capture)
+    # cannot be seen in the data.
+    # The read-only ~/selftest / ~/get_sn are not affected by this switch and always exist.
+    allow_calibration: false
+
+    # ── Product model ───────────────────────────────────────────
+    # auto = identify P1 / PTV1 from the MCU serial number rules + the hardware present (identification is
+    #        read-only; nothing is written to the device)
+    # P1 / PTV1 = declare the product model; refuse to start if the identification evidence contradicts it
+    # off = no identification; the sensor set follows the individual parameters below entirely
+    product: "auto"
+    # Product model rules file; empty = ~/.config/revohuman/products.yaml
+    # (overridable with $REVOHUMAN_PRODUCTS)
+    product_rules_path: ""
+    # true = refuse to start if a sensor the product model should have is missing; false = warning only
+    product_strict: true
+
+    # ── Only used with mode:=pair ───────────────────────────────
+    # Split tactile (on by default): true = tactile is published sample by sample at the sensor module's own
+    # rate (about 215Hz for 241 points); header.stamp is the sample's own sampling time, frame_stamp is filled
+    # with the same value and no longer corresponds to any joint frame, so downstream must pair by nearest
+    # header.stamp; joints stay at 200Hz; if the firmware does not support split tactile, the combined frame
+    # is used automatically.
+    # false = tactile rides on the combined frame and is published on the same tick as the joints; frame_stamp
+    # is bit-identical to the header.stamp of joint_states from the same tick and can be used for exact-match
+    # pairing (if you need this contract, turn it off explicitly: split_tactile:=false).
+    split_tactile: true
+    # strict = publish only pairs matched at the same hardware-synchronized sampling time;
+    # best_effort = allow pairing within the accuracy budget
+    pair_mode: "strict"
+    # Accuracy budget (ms) for left/right glove pairing. Negative = use the pair_mode default (strict → 0.0)
+    pair_accuracy_ms: -1.0
+    # Accuracy budget (ms) for left/right Tracker pairing
+    tracker_pair_accuracy_ms: 1.0
+    # Glove button reported with the stream → /revohuman/pair/button_event (one String+JSON per valid press).
+    # If the firmware does not support it, capture continues as usual, just without events. The node only
+    # forwards; start / stop is decided by the subscriber
+    button: false
+
+    # ── tracker ────────────────────────────────────────────────
+    # required = if the Tracker fails to start, the whole node fails to start (the default minimum capture
+    #            unit includes the Tracker)
+    # auto     = if it fails to start, warn only; the glove keeps publishing
+    # off      = glove only; libsurvive is not touched
+    tracker_mode: "required"
+    # Empty serial number = resolve by "parameter > the Tracker actually plugged into that hand's glove HUB";
+    # if neither has one, refuse to start (no guessing by enumeration order)
+    tracker_serial: ""          # for mode:=left|right
+    tracker_left_serial: ""     # for mode:=pair
+    tracker_right_serial: ""    # for mode:=pair
+    # 8-digit ids of the enrolled base stations; [""] = resolve from the base station allowlist (the allowlist
+    # and the calibration thresholds live in the same config file; which file is used and what is missing:
+    # `revohuman-lighthouses show`; for the coverage thresholds the ROS parameters below take precedence)
+    tracker_lighthouses: [""]
+    # What to do when a base station is moved at runtime:
+    # error = stop capture immediately and abort recording (default; poses after the move are not in the same
+    #         frame as before, and this cannot be told apart afterwards)
+    # flag  = only record one epoch change, keep capturing
+    # off   = no detection at all
+    tracker_world_gate_mode: "error"
+    # Absolute accuracy budget (ms) for the sampling time. Negative = no requirement; after calibrating
+    # φ_pack, set 0.2 to block uncalibrated machines at startup
+    tracker_stamp_accuracy_ms: -1.0
+    # φ_pack calibration values, per serial number ["LHR-XXXXXXXX=0.31", ...]; empty = uncalibrated.
+    # This must be filled in before tracker_stamp_accuracy_ms can be satisfied
+    tracker_phi_pack_ms: [""]
+    # Tracker liveness gate window (s). Negative = SDK automatic setting; 0 = explicitly off
+    tracker_liveness_gate_s: -1.0
+    # frame_id of the Tracker pose
+    tracker_frame_id: "world"
+    # Extra libsurvive arguments; [""] = SDK default. Example: orientation jump gate (off by default;
+    # see the reference manual, section 4.8)
+    #   ["--kalman-obs-rot-gate-deg", "5", "--kalman-obs-rot-gate-release-sec", "0.1"]
+    tracker_survive_args: [""]
+
+    # ── Base station geometry calibration and zero pose ─────────
+    # State directory (enrolled base stations, calibration records, zero pose, channel preflight check,
+    # current mode). Empty =
+    # $REVOHUMAN_TRACKER_STATE_DIR > $XDG_STATE_HOME/revohuman/tracker > ~/.local/state/revohuman/tracker
+    tracker_state_dir: ""
+    # libsurvive config file; empty = ~/.config/libsurvive/config.json
+    tracker_config_path: ""
+    # Base station geometry gate in run mode (extrinsics cleared / geometry missing /
+    # base station spacing drift):
+    # error = refuse zero pose calibration (default); flag = only mark it in tracker_status; off = no check
+    tracker_geometry_gate_mode: "error"
+    # true = accept light signals only from enrolled base stations (relaxed automatically when none are
+    # enrolled or there is no geometry yet)
+    tracker_fence: true
+    # true = require a base station channel preflight check within the last 5 minutes before entering
+    # geometry calibration (`python3 -m revohuman tracker preflight`)
+    tracker_require_preflight: true
+    # Geometry calibration timeout (s); a timeout counts as failure and the config is rolled back to its
+    # state before calibration
+    tracker_calibration_timeout_s: 300.0
+
+    # ── Wrist camera ────────────────────────────────────────────
+    # ""       = by product model: PTV1 → required, P1 / product=off → off (default)
+    # off      = no topics created, sysfs not touched, revohuman.camera not imported
+    # auto     = if it starts, publish <ns>/wrist_camera/image/compressed (pair: wrist_camera_left|right/…);
+    #            if it fails to start, warn only and the glove keeps publishing
+    # required = if the camera fails to start, the whole node fails to start
+    camera_mode: ""
+    # Device node empty = auto-discover a camera of a listed model under that hand's glove unit HUB;
+    # an explicit /dev/videoN skips the sysfs lookup
+    camera_device: ""            # for mode:=left|right
+    camera_meta_device: ""       # as above: UVC metadata node (usually /dev/videoN+1); empty = automatic
+    camera_usb_hub: ""           # as above: limit to one HUB (e.g. "3-1"); empty = that hand's glove unit HUB
+    camera_left_device: ""       # for mode:=pair; same meaning as the three above
+    camera_left_meta_device: ""
+    camera_left_usb_hub: ""
+    camera_right_device: ""
+    camera_right_meta_device: ""
+    camera_right_usb_hub: ""
+    # Camera model (uvc_28c4 = USB 1bcf:28c4, uvc_3080 = USB 0edc:3080); empty = auto-detect from the
+    # device USB id.
+    # If set, it is pinned: if the plugged-in camera is not this model, the camera fails to start (prevents
+    # keeping the old model's imaging settings after a camera swap)
+    camera_model: ""
+    # Imaging: 640×480@30 MJPG. YUYV has the same frame rate and about 10x the bitrate
+    camera_width: 640
+    camera_height: 480
+    camera_fps: 30
+    camera_fourcc: "MJPG"
+    # Exposure: <= 0 = auto exposure (default); positive = fixed exposure in 100µs units (333 = 33.3ms,
+    # the 30fps limit)
+    camera_exposure: -1
+    # Number of v4l2 mmap buffers; zero-copy loan quota = buffers - loan_reserve (by default the SDK keeps
+    # 2 for the driver)
+    camera_buffers: 4
+    # Timestamp from the PTS of the UVC metadata node (relative error at the µs level); false = fall back to
+    # the buffer timestamp (±2ms quantization)
+    camera_use_metadata: true
+    # true = subscribe(loaned=True): frames are read in the driver buffer and copied only once into the ROS
+    # message; false = the SDK makes a copy first, then publishes
+    camera_zero_copy: true
+    # Image frame_id; empty = revohuman_<hand>_wrist_camera (under pair, an explicit value gets _left / _right
+    # appended)
+    camera_frame_id: ""
+    # ── Camera calibration values (all empty = uncalibrated, model values used) ──
+    # Constant offset of the PTS relative to the sampling time, in milliseconds. Empty = for camera models
+    # listed in the SDK, the sampling time is placed at the exposure center using that model's measured
+    # timing; unlisted models use the "readout midpoint" model (error ±(exposure/2 + about 1ms)).
+    # Only an empty string means uncalibrated: 0 and negative values are both valid calibration values.
+    camera_pts_offset_ms: ""
+    # Rolling-shutter readout time in milliseconds (first row → last row). Empty = nominal frame period
+    # (33.3ms at 30fps)
+    camera_readout_ms: ""
+    # Extra controls, layered on top of that model's managed table (the SDK camera model registry; those
+    # 11 controls are managed by default).
+    # Format ["name=value", ...]; names must be known controls, and a wrong name **fails at startup** instead
+    # of being silently ignored.
+    # Example: ["white_balance_automatic=0", "white_balance_temperature=4600"] (calibrate the color
+    # temperature per unit first)
+    camera_controls: [""]
+    # true = fail to start if any control could not be set. Default false: the stream still runs with wrong
+    # imaging parameters, and on a recording site it is better to keep recording with a warning;
+    # for gate checks / calibration it should be set to true
+    camera_strict_controls: false

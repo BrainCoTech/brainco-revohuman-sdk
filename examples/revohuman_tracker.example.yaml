@@ -1,0 +1,20 @@
+# RevoHuman tracker 配置：基站白名单 + 基站几何标定门限。
+#
+# 只读一份，按这个顺序找（命令行启动时会打印用的是哪一份）：
+#   --whitelist <文件>  >  $REVOHUMAN_LIGHTHOUSES  >  源码树根的 revohuman_tracker.yaml
+#   >  ~/.config/revohuman/lighthouses.yaml
+# 填了真实序列号的文件不要提交进 git。
+
+# 基站白名单：基站背面标签上 FA 开头的 12 位序列号。
+# 不要填 LHB-xxxxxxxx 广播名，也不要填信道号；不知道是哪台先运行 revohuman-lighthouses scan。
+lighthouses:
+  - FAXXXXXXXXXX            # 换成第一台基站的序列号
+  # - serial: FAYYYYYYYYYY  # 第二台（可选写 place 注明位置）
+  #   place: 右后上方
+
+# 标定时的视角覆盖门限（可省略，没写的项用默认 2 格 / 5°；命令行 --coverage-cells /
+# --coverage-span-deg 优先于这里）。下面写的就是默认值，加基站后按需要调高。
+# 一个位置就会同时占 1 个水平格和 1 个竖直格，所以格子数 <=2 时这条一开始就满足，实际起作用的只剩张角。
+calibration:
+  coverage_cells: 2         # 视角覆盖格数（每台基站最多 10 格；0 关闭）
+  coverage_span_deg: 5      # 视角张角（度）

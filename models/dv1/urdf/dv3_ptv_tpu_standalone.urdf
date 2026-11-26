@@ -1,0 +1,1224 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="dv3_tpu_bimanual_description">
+  <material name="black">
+    <color rgba="0 0 0 1" />
+  </material>
+  <link name="left_palm_link">
+    <inertial>
+      <origin xyz="0.002896578834 -0.0033757 0.09206700283000001" rpy="0 0 0" />
+      <mass value="0.019337" />
+      <inertia ixx="2.4837E-05" ixy="3.8433e-07" ixz="1.3347E-06" iyy="1.1931E-05" iyz="2.0503e-06" izz="1.3907E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_palm_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_palm_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_thumb_CMP_Link">
+    <inertial>
+      <origin xyz="0.004277 -3.565e-08 -0.0039327" rpy="0 0 0" />
+      <mass value="0.0010452" />
+      <inertia ixx="3.3711E-08" ixy="4.0573e-14" ixz="7.4383E-09" iyy="3.1498E-08" iyz="7.0197e-14" izz="2.3168E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_cmp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_cmp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_thumb_CMR_Link">
+    <inertial>
+      <origin xyz="0.00071667 -0.021897 0.0033891" rpy="0 0 0" />
+      <mass value="0.0024887" />
+      <inertia ixx="2.1903E-07" ixy="1.849e-08" ixz="-5.8154E-08" iyy="2.1763E-07" iyz="4.0953e-08" izz="2.2698E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_cmr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_cmr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_thumb_MCP_Link">
+    <inertial>
+      <origin xyz="0.0076882 -0.0024647 0.020461" rpy="0 0 0" />
+      <mass value="0.00088024" />
+      <inertia ixx="1.9592E-07" ixy="6.1649e-09" ixz="-5.2037E-08" iyy="2.131E-07" iyz="1.2941e-08" izz="2.288E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_thumb_PIP_Link">
+    <inertial>
+      <origin xyz="0.0025541 0.0053335 0.024305" rpy="0 0 0" />
+      <mass value="0.00241" />
+      <inertia ixx="3.1005E-07" ixy="-2.0829e-08" ixz="-9.7684E-09" iyy="3.0804E-07" iyz="-1.1011e-08" izz="1.3272E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_thumb_DIP_Link">
+    <inertial>
+      <origin xyz="0.0039596 0.0076603 0.014351" rpy="0 0 0" />
+      <mass value="0.0011796" />
+      <inertia ixx="8.4096E-08" ixy="-1.6657e-08" ixz="-1.4827E-10" iyy="8.0686E-08" iyz="-1.1034e-08" izz="7.0485E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_thumb_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_index_MPR_Link">
+    <inertial>
+      <origin xyz="0.00012383 0.0090419 0.0086696" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.8853E-08" ixy="3.9588e-09" ixz="-1.7596E-08" iyy="7.9116E-08" iyz="9.462499999999999e-10" izz="3.3267E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_index_MCP_Link">
+    <inertial>
+      <origin xyz="0.0098989 -0.0067735 0.02465" rpy="0 0 0" />
+      <mass value="0.0028043" />
+      <inertia ixx="4.878E-07" ixy="2.5589e-08" ixz="-1.3384E-07" iyy="5.1757E-07" iyz="4.3026e-08" izz="1.6207E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_index_PIP_Link">
+    <inertial>
+      <origin xyz="0.0007337999999999999 -0.0075742 0.014191" rpy="0 0 0" />
+      <mass value="0.001509" />
+      <inertia ixx="1.2133E-07" ixy="6.2805e-09" ixz="-2.6699E-09" iyy="1.0996E-07" iyz="1.6961e-08" izz="5.8488E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_index_DIP_Link">
+    <inertial>
+      <origin xyz="-4.333e-06 -0.0064575 0.0094495" rpy="0 0 0" />
+      <mass value="0.0011837" />
+      <inertia ixx="5.511E-08" ixy="5.4997e-09" ixz="5.7092E-09" iyy="4.6512E-08" iyz="5.7228e-09" izz="3.8498E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_index_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_middle_MPR_Link">
+    <inertial>
+      <origin xyz="0.0016921 0.0099836 0.0073754" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.9914E-08" ixy="-3.0828e-10" ixz="-1.7284E-08" iyy="7.8299E-08" iyz="-2.2198e-09" izz="3.3024E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_middle_MCP_Link">
+    <inertial>
+      <origin xyz="0.0084552 -0.005061 0.032565" rpy="0 0 0" />
+      <mass value="0.0028992" />
+      <inertia ixx="7.3517E-07" ixy="1.3333e-08" ixz="-1.6856E-07" iyy="7.6265E-07" iyz="2.6041e-08" izz="1.573E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_middle_PIP_Link">
+    <inertial>
+      <origin xyz="-0.0008143099999999999 -0.0038125 0.0165" rpy="0 0 0" />
+      <mass value="0.002168" />
+      <inertia ixx="2.1875E-07" ixy="3.9168e-09" ixz="-3.1003E-09" iyy="2.1195E-07" iyz="7.0353e-09" izz="6.1215E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_middle_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0011253 -0.0050094 0.01023" rpy="0 0 0" />
+      <mass value="0.0011838" />
+      <inertia ixx="5.6734E-08" ixy="4.5692e-09" ixz="6.0488E-09" iyy="4.6029E-08" iyz="3.6065e-09" izz="3.7365E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_middle_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_ring_MPR_Link">
+    <inertial>
+      <origin xyz="0.0016921 0.010808 0.0061038" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.9914E-08" ixy="-2.4124e-09" ixz="-1.7118E-08" iyy="7.7089E-08" iyz="-7.630299999999999e-09" izz="3.4233E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_ring_MCP_Link">
+    <inertial>
+      <origin xyz="0.0085723 -0.0018293 0.02598" rpy="0 0 0" />
+      <mass value="0.0028043" />
+      <inertia ixx="4.9745E-07" ixy="-3.7002e-09" ixz="-1.2765E-07" iyy="5.1771E-07" iyz="-2.8671e-08" izz="1.5227E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_ring_PIP_Link">
+    <inertial>
+      <origin xyz="-0.0005926 -0.0036965 0.015662" rpy="0 0 0" />
+      <mass value="0.001509" />
+      <inertia ixx="1.2313E-07" ixy="3.9068e-09" ixz="-7.0884E-10" iyy="1.134E-07" iyz="2.6104e-09" izz="5.3244E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_ring_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0011254 -0.0037253 0.010764" rpy="0 0 0" />
+      <mass value="0.0011837" />
+      <inertia ixx="5.6733E-08" ixy="5.2727e-09" ixz="5.447E-09" iyy="4.6772E-08" iyz="2.4519e-09" izz="3.6621E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_ring_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_little_MPR_Link">
+    <inertial>
+      <origin xyz="0.0042395 0.010841 0.004629" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.7091E-08" ixy="-7.5829e-09" ixz="-1.9139E-08" iyy="7.718E-08" iyz="-8.8769e-09" izz="3.6965E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_little_MCP_Link">
+    <inertial>
+      <origin xyz="0.0087511 -0.001049 0.019111" rpy="0 0 0" />
+      <mass value="0.0023133" />
+      <inertia ixx="2.6912E-07" ixy="-7.2579e-09" ixz="-8.5215E-08" iyy="2.8944E-07" iyz="-2.0839e-08" izz="1.0109E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_little_PIP_Link">
+    <inertial>
+      <origin xyz="-5.6127e-05 0.0024047 0.01094" rpy="0 0 0" />
+      <mass value="0.0021671" />
+      <inertia ixx="1.2815E-07" ixy="-2.1784e-09" ixz="-2.2331E-09" iyy="1.1603E-07" iyz="-7.1231e-09" izz="7.2659E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_little_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0019586 -0.0014375 0.011268" rpy="0 0 0" />
+      <mass value="0.0011332" />
+      <inertia ixx="4.9556E-08" ixy="1.9652e-09" ixz="4.5485E-09" iyy="3.9743E-08" iyz="2.8835e-12" izz="3.0115E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_little_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_tracker_Link">
+    <inertial>
+      <origin xyz="-0.016432 2.8859e-05 0.00029697" rpy="0 0 0" />
+      <mass value="0.092328" />
+      <inertia ixx="6.3392E-05" ixy="-4.062e-08" ixz="-2.4347E-07" iyy="4.1631E-05" iyz="-2.3489e-08" izz="4.1859E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_tracker_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_left_tracker_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_tracker_joint" type="fixed">
+    <origin xyz="-0.005676321166 -0.0023415 0.08614770283000001" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_tracker_Link" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <joint name="left_thumb_CMP_joint" type="continuous">
+    <origin xyz="0.0178304583113182 -0.03800001968997224 0.04033105133760262" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_thumb_CMP_Link" />
+    <axis xyz="0 0 1" />
+  </joint>
+  <joint name="left_thumb_CMR_joint" type="continuous">
+    <origin xyz="0.002686999999998406 0 -0.007300000000034612" rpy="0 0 0" />
+    <parent link="left_thumb_CMP_Link" />
+    <child link="left_thumb_CMR_Link" />
+    <axis xyz="1 1.32321097107336e-14 0" />
+  </joint>
+  <joint name="left_thumb_MCP_joint" type="continuous">
+    <origin xyz="0.008155419440584521 -0.02738300131724514 0.01499999999905055" rpy="0 0 0" />
+    <parent link="left_thumb_CMR_Link" />
+    <child link="left_thumb_MCP_Link" />
+    <axis xyz="0.4999999999999897 0.8660254037844445 1.905270748491824e-14" />
+  </joint>
+  <joint name="left_thumb_PIP_joint" type="continuous">
+    <origin xyz="0.01039230484547555 -0.006000000000050187 0.03800000000010118" rpy="0 0 0" />
+    <parent link="left_thumb_MCP_Link" />
+    <child link="left_thumb_PIP_Link" />
+    <axis xyz="0.4999999999999971 0.8660254037844404 0" />
+  </joint>
+  <joint name="left_thumb_DIP_joint" type="continuous">
+    <origin xyz="0 0 0.03999999999995818" rpy="0 0 0" />
+    <parent link="left_thumb_PIP_Link" />
+    <child link="left_thumb_DIP_Link" />
+    <axis xyz="0.4999999999999867 0.8660254037844464 2.793826830036886e-14" />
+  </joint>
+  <joint name="left_index_MPR_joint" type="continuous">
+    <origin xyz="-0.001873184132158251 -0.03556205751635655 0.1195638097443618" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_index_MPR_Link" />
+    <axis xyz="0.9848077530122078 0.1736481776669322 0" />
+  </joint>
+  <joint name="left_index_MCP_joint" type="continuous">
+    <origin xyz="0.002674267049667037 0.01017206802624637 0.01688275237680281" rpy="0 0 0" />
+    <parent link="left_index_MPR_Link" />
+    <child link="left_index_MCP_Link" />
+    <axis xyz="-0.1710893158085665 0.9702957262759997 0.1710399064156871" />
+  </joint>
+  <joint name="left_index_PIP_joint" type="continuous">
+    <origin xyz="0.01306512529455807 -0.004990761756329176 0.04138109227810494" rpy="0 0 0" />
+    <parent link="left_index_MCP_Link" />
+    <child link="left_index_PIP_Link" />
+    <axis xyz="-0.1710893158085641 0.9702957262759982 0.1710399064156974" />
+  </joint>
+  <joint name="left_index_DIP_joint" type="continuous">
+    <origin xyz="0.0007722199694928204 -0.004379477073729099 0.02561686664835106" rpy="0 0 0" />
+    <parent link="left_index_PIP_Link" />
+    <child link="left_index_DIP_Link" />
+    <axis xyz="-0.171089315808566 0.9702957262759989 0.1710399064156916" />
+  </joint>
+  <joint name="left_middle_MPR_joint" type="continuous">
+    <origin xyz="-0.003799999825513681 -0.01100001968996933 0.1215029579162755" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_middle_MPR_Link" />
+    <axis xyz="1 0 0" />
+  </joint>
+  <joint name="left_middle_MCP_joint" type="continuous">
+    <origin xyz="0.004400000000000296 0.01176901472178982 0.01542012621472921" rpy="0 0 0" />
+    <parent link="left_middle_MPR_Link" />
+    <child link="left_middle_MCP_Link" />
+    <axis xyz="0 0.9993908270190961 0.03489949670248862" />
+  </joint>
+  <joint name="left_middle_PIP_joint" type="continuous">
+    <origin xyz="0.01200000000000048 -0.001797324080178186 0.0514686275914833" rpy="0 0 0" />
+    <parent link="left_middle_MCP_Link" />
+    <child link="left_middle_PIP_Link" />
+    <axis xyz="0 0.9993908270190961 0.0348994967024899" />
+  </joint>
+  <joint name="left_middle_DIP_joint" type="continuous">
+    <origin xyz="0 -0.0009946356560208702 0.02848263857004429" rpy="0 0 0" />
+    <parent link="left_middle_PIP_Link" />
+    <child link="left_middle_DIP_Link" />
+    <axis xyz="0 0.9993908270190961 0.03489949670249151" />
+  </joint>
+  <joint name="left_ring_MPR_joint" type="continuous">
+    <origin xyz="-0.003799999825510792 0.01049998031003074 0.1198914312899333" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_ring_MPR_Link" />
+    <axis xyz="1 0 0" />
+  </joint>
+  <joint name="left_ring_MCP_joint" type="continuous">
+    <origin xyz="0.00439999999999724 0.0135605309277429 0.01387090483558007" rpy="0 0 0" />
+    <parent link="left_ring_MPR_Link" />
+    <child link="left_ring_MCP_Link" />
+    <axis xyz="0 0.9961946980917457 -0.08715574274765714" />
+  </joint>
+  <joint name="left_ring_PIP_joint" type="continuous">
+    <origin xyz="0.01200000000000038 0.003660541195401379 0.04184017731985323" rpy="0 0 0" />
+    <parent link="left_ring_MCP_Link" />
+    <child link="left_ring_PIP_Link" />
+    <axis xyz="0 0.9961946980917461 -0.08715574274765159" />
+  </joint>
+  <joint name="left_ring_DIP_joint" type="continuous">
+    <origin xyz="0 0.002266049311439144 0.02590106215038568" rpy="0 0 0" />
+    <parent link="left_ring_PIP_Link" />
+    <child link="left_ring_DIP_Link" />
+    <axis xyz="0 0.9961946980917464 -0.08715574274764676" />
+  </joint>
+  <joint name="left_little_MPR_joint" type="continuous">
+    <origin xyz="-0.002469429083494559 0.03311593501713939 0.112883000812571" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="left_little_MPR_Link" />
+    <axis xyz="0.9743700647852501 -0.2249510543437999 0" />
+  </joint>
+  <joint name="left_little_MCP_joint" type="continuous">
+    <origin xyz="0.007721630888533861 0.01388624738043698 0.01196655966059446" rpy="0 0 0" />
+    <parent link="left_little_MPR_Link" />
+    <child link="left_little_MCP_Link" />
+    <axis xyz="0.2195686975751809 0.9510565162951539 -0.2174421528997179" />
+  </joint>
+  <joint name="left_little_PIP_joint" type="continuous">
+    <origin xyz="0.01325768370713774 0.004080399335328111 0.03123434270135539" rpy="0 0 0" />
+    <parent link="left_little_MCP_Link" />
+    <child link="left_little_PIP_Link" />
+    <axis xyz="0.2195686975751815 0.9510565162951529 -0.2174421528997226" />
+  </joint>
+  <joint name="left_little_DIP_joint" type="continuous">
+    <origin xyz="0.0009782768310716457 0.004237382492159214 0.0195214641883481" rpy="0 0 0" />
+    <parent link="left_little_PIP_Link" />
+    <child link="left_little_DIP_Link" />
+    <axis xyz="0.2195686975751812 0.9510565162951521 -0.2174421528997258" />
+  </joint>
+  <link name="right_palm_link">
+    <inertial>
+      <origin xyz="0.002896578834 0.0033757 0.09206700283000001" rpy="0 0 0" />
+      <mass value="0.019337" />
+      <inertia ixx="2.4837E-05" ixy="-3.8433E-07" ixz="1.3347E-06" iyy="1.1931E-05" iyz="-2.0503E-06" izz="1.3907E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_palm_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_palm_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_thumb_CMP_Link">
+    <inertial>
+      <origin xyz="0.004277 3.565E-08 -0.0039327" rpy="0 0 0" />
+      <mass value="0.0010452" />
+      <inertia ixx="3.3711E-08" ixy="-4.0573E-14" ixz="7.4383E-09" iyy="3.1498E-08" iyz="-7.0197E-14" izz="2.3168E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_cmp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_cmp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_thumb_CMR_Link">
+    <inertial>
+      <origin xyz="0.00071667 0.021897 0.0033891" rpy="0 0 0" />
+      <mass value="0.0024887" />
+      <inertia ixx="2.1903E-07" ixy="-1.849E-08" ixz="-5.8154E-08" iyy="2.1763E-07" iyz="-4.0953E-08" izz="2.2698E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_cmr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_cmr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_thumb_MCP_Link">
+    <inertial>
+      <origin xyz="0.0076882 0.0024647 0.020461" rpy="0 0 0" />
+      <mass value="0.00088024" />
+      <inertia ixx="1.9592E-07" ixy="-6.1649E-09" ixz="-5.2037E-08" iyy="2.131E-07" iyz="-1.2941E-08" izz="2.288E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_thumb_PIP_Link">
+    <inertial>
+      <origin xyz="0.0025541 -0.0053335 0.024305" rpy="0 0 0" />
+      <mass value="0.00241" />
+      <inertia ixx="3.1005E-07" ixy="2.0829E-08" ixz="-9.7684E-09" iyy="3.0804E-07" iyz="1.1011E-08" izz="1.3272E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_thumb_DIP_Link">
+    <inertial>
+      <origin xyz="0.0039596 -0.0076603 0.014351" rpy="0 0 0" />
+      <mass value="0.0011796" />
+      <inertia ixx="8.4096E-08" ixy="1.6657E-08" ixz="-1.4827E-10" iyy="8.0686E-08" iyz="1.1034E-08" izz="7.0485E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_thumb_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_index_MPR_Link">
+    <inertial>
+      <origin xyz="0.00012383 -0.0090419 0.0086696" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.8853E-08" ixy="-3.9588E-09" ixz="-1.7596E-08" iyy="7.9116E-08" iyz="-9.4625E-10" izz="3.3267E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_index_MCP_Link">
+    <inertial>
+      <origin xyz="0.0098989 0.0067735 0.02465" rpy="0 0 0" />
+      <mass value="0.0028043" />
+      <inertia ixx="4.878E-07" ixy="-2.5589E-08" ixz="-1.3384E-07" iyy="5.1757E-07" iyz="-4.3026E-08" izz="1.6207E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_index_PIP_Link">
+    <inertial>
+      <origin xyz="0.0007338 0.0075742 0.014191" rpy="0 0 0" />
+      <mass value="0.001509" />
+      <inertia ixx="1.2133E-07" ixy="-6.2805E-09" ixz="-2.6699E-09" iyy="1.0996E-07" iyz="-1.6961E-08" izz="5.8488E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_index_DIP_Link">
+    <inertial>
+      <origin xyz="-4.333E-06 0.0064575 0.0094495" rpy="0 0 0" />
+      <mass value="0.0011837" />
+      <inertia ixx="5.511E-08" ixy="-5.4997E-09" ixz="5.7092E-09" iyy="4.6512E-08" iyz="-5.7228E-09" izz="3.8498E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_index_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_middle_MPR_Link">
+    <inertial>
+      <origin xyz="0.0016921 -0.0099836 0.0073754" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.9914E-08" ixy="3.0828E-10" ixz="-1.7284E-08" iyy="7.8299E-08" iyz="2.2198E-09" izz="3.3024E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_middle_MCP_Link">
+    <inertial>
+      <origin xyz="0.0084552 0.005061 0.032565" rpy="0 0 0" />
+      <mass value="0.0028992" />
+      <inertia ixx="7.3517E-07" ixy="-1.3333E-08" ixz="-1.6856E-07" iyy="7.6265E-07" iyz="-2.6041E-08" izz="1.573E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_middle_PIP_Link">
+    <inertial>
+      <origin xyz="-0.00081431 0.0038125 0.0165" rpy="0 0 0" />
+      <mass value="0.002168" />
+      <inertia ixx="2.1875E-07" ixy="-3.9168E-09" ixz="-3.1003E-09" iyy="2.1195E-07" iyz="-7.0353E-09" izz="6.1215E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_middle_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0011253 0.0050094 0.01023" rpy="0 0 0" />
+      <mass value="0.0011838" />
+      <inertia ixx="5.6734E-08" ixy="-4.5692E-09" ixz="6.0488E-09" iyy="4.6029E-08" iyz="-3.6065E-09" izz="3.7365E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_middle_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_ring_MPR_Link">
+    <inertial>
+      <origin xyz="0.0016921 -0.010808 0.0061038" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.9914E-08" ixy="2.4124E-09" ixz="-1.7118E-08" iyy="7.7089E-08" iyz="7.6303E-09" izz="3.4233E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_ring_MCP_Link">
+    <inertial>
+      <origin xyz="0.0085723 0.0018293 0.02598" rpy="0 0 0" />
+      <mass value="0.0028043" />
+      <inertia ixx="4.9745E-07" ixy="3.7002E-09" ixz="-1.2765E-07" iyy="5.1771E-07" iyz="2.8671E-08" izz="1.5227E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_ring_PIP_Link">
+    <inertial>
+      <origin xyz="-0.0005926 0.0036965 0.015662" rpy="0 0 0" />
+      <mass value="0.001509" />
+      <inertia ixx="1.2313E-07" ixy="-3.9068E-09" ixz="-7.0884E-10" iyy="1.134E-07" iyz="-2.6104E-09" izz="5.3244E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_ring_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0011254 0.0037253 0.010764" rpy="0 0 0" />
+      <mass value="0.0011837" />
+      <inertia ixx="5.6733E-08" ixy="-5.2727E-09" ixz="5.447E-09" iyy="4.6772E-08" iyz="-2.4519E-09" izz="3.6621E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_ring_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_little_MPR_Link">
+    <inertial>
+      <origin xyz="0.0042395 -0.010841 0.004629" rpy="0 0 0" />
+      <mass value="0.0013255" />
+      <inertia ixx="8.7091E-08" ixy="7.5829E-09" ixz="-1.9139E-08" iyy="7.718E-08" iyz="8.8769E-09" izz="3.6965E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_mpr_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_mpr_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_little_MCP_Link">
+    <inertial>
+      <origin xyz="0.0087511 0.001049 0.019111" rpy="0 0 0" />
+      <mass value="0.0023133" />
+      <inertia ixx="2.6912E-07" ixy="7.2579E-09" ixz="-8.5215E-08" iyy="2.8944E-07" iyz="2.0839E-08" izz="1.0109E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_mcp_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_mcp_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_little_PIP_Link">
+    <inertial>
+      <origin xyz="-5.6127E-05 -0.0024047 0.01094" rpy="0 0 0" />
+      <mass value="0.0021671" />
+      <inertia ixx="1.2815E-07" ixy="2.1784E-09" ixz="-2.2331E-09" iyy="1.1603E-07" iyz="7.1231E-09" izz="7.2659E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_pip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_pip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_little_DIP_Link">
+    <inertial>
+      <origin xyz="-0.0019586 0.0014375 0.011268" rpy="0 0 0" />
+      <mass value="0.0011332" />
+      <inertia ixx="4.9556E-08" ixy="-1.9652E-09" ixz="4.5485E-09" iyy="3.9743E-08" iyz="-2.8835E-12" izz="3.0115E-08" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_dip_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_little_dip_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="right_tracker_Link">
+    <inertial>
+      <origin xyz="-0.016432 -2.8859E-05 0.00029697" rpy="0 0 0" />
+      <mass value="0.092328" />
+      <inertia ixx="6.3392E-05" ixy="4.062E-08" ixz="-2.4347E-07" iyy="4.1631E-05" iyz="2.3489E-08" izz="4.1859E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_tracker_link.stl" />
+      </geometry>
+      <material name="black" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../meshes/dv3_ptv_camera_tactile_right_tracker_link.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_tracker_joint" type="fixed">
+    <origin xyz="-0.005676321166 0.0023415 0.08614770283" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_tracker_Link" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <joint name="right_thumb_CMP_joint" type="continuous">
+    <origin xyz="0.0178304583113182 0.03800001968997224 0.04033105133760262" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_thumb_CMP_Link" />
+    <axis xyz="0 0 -1" />
+  </joint>
+  <joint name="right_thumb_CMR_joint" type="continuous">
+    <origin xyz="0.002686999999998406 0 -0.007300000000034612" rpy="0 0 0" />
+    <parent link="right_thumb_CMP_Link" />
+    <child link="right_thumb_CMR_Link" />
+    <axis xyz="-1 1.32321097107336e-14 0" />
+  </joint>
+  <joint name="right_thumb_MCP_joint" type="continuous">
+    <origin xyz="0.008155419440584521 0.02738300131724514 0.01499999999905055" rpy="0 0 0" />
+    <parent link="right_thumb_CMR_Link" />
+    <child link="right_thumb_MCP_Link" />
+    <axis xyz="-0.4999999999999897 0.8660254037844445 -1.905270748491824e-14" />
+  </joint>
+  <joint name="right_thumb_PIP_joint" type="continuous">
+    <origin xyz="0.01039230484547555 0.006000000000050187 0.03800000000010118" rpy="0 0 0" />
+    <parent link="right_thumb_MCP_Link" />
+    <child link="right_thumb_PIP_Link" />
+    <axis xyz="-0.4999999999999971 0.8660254037844404 0" />
+  </joint>
+  <joint name="right_thumb_DIP_joint" type="continuous">
+    <origin xyz="0 0 0.03999999999995818" rpy="0 0 0" />
+    <parent link="right_thumb_PIP_Link" />
+    <child link="right_thumb_DIP_Link" />
+    <axis xyz="-0.4999999999999867 0.8660254037844464 -2.793826830036886e-14" />
+  </joint>
+  <joint name="right_index_MPR_joint" type="continuous">
+    <origin xyz="-0.001873184132158251 0.03556205751635655 0.1195638097443618" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_index_MPR_Link" />
+    <axis xyz="-0.9848077530122078 0.1736481776669322 0" />
+  </joint>
+  <joint name="right_index_MCP_joint" type="continuous">
+    <origin xyz="0.002674267049667037 -0.01017206802624637 0.01688275237680281" rpy="0 0 0" />
+    <parent link="right_index_MPR_Link" />
+    <child link="right_index_MCP_Link" />
+    <axis xyz="0.1710893158085665 0.9702957262759997 -0.1710399064156871" />
+  </joint>
+  <joint name="right_index_PIP_joint" type="continuous">
+    <origin xyz="0.01306512529455807 0.004990761756329176 0.04138109227810494" rpy="0 0 0" />
+    <parent link="right_index_MCP_Link" />
+    <child link="right_index_PIP_Link" />
+    <axis xyz="0.1710893158085641 0.9702957262759982 -0.1710399064156974" />
+  </joint>
+  <joint name="right_index_DIP_joint" type="continuous">
+    <origin xyz="0.0007722199694928204 0.004379477073729099 0.02561686664835106" rpy="0 0 0" />
+    <parent link="right_index_PIP_Link" />
+    <child link="right_index_DIP_Link" />
+    <axis xyz="0.171089315808566 0.9702957262759989 -0.1710399064156916" />
+  </joint>
+  <joint name="right_middle_MPR_joint" type="continuous">
+    <origin xyz="-0.003799999825513681 0.01100001968996933 0.1215029579162755" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_middle_MPR_Link" />
+    <axis xyz="-1 0 0" />
+  </joint>
+  <joint name="right_middle_MCP_joint" type="continuous">
+    <origin xyz="0.004400000000000296 -0.01176901472178982 0.01542012621472921" rpy="0 0 0" />
+    <parent link="right_middle_MPR_Link" />
+    <child link="right_middle_MCP_Link" />
+    <axis xyz="0 0.9993908270190961 -0.03489949670248862" />
+  </joint>
+  <joint name="right_middle_PIP_joint" type="continuous">
+    <origin xyz="0.01200000000000048 0.001797324080178186 0.0514686275914833" rpy="0 0 0" />
+    <parent link="right_middle_MCP_Link" />
+    <child link="right_middle_PIP_Link" />
+    <axis xyz="0 0.9993908270190961 -0.0348994967024899" />
+  </joint>
+  <joint name="right_middle_DIP_joint" type="continuous">
+    <origin xyz="0 0.0009946356560208702 0.02848263857004429" rpy="0 0 0" />
+    <parent link="right_middle_PIP_Link" />
+    <child link="right_middle_DIP_Link" />
+    <axis xyz="0 0.9993908270190961 -0.03489949670249151" />
+  </joint>
+  <joint name="right_ring_MPR_joint" type="continuous">
+    <origin xyz="-0.003799999825510792 -0.01049998031003074 0.1198914312899333" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_ring_MPR_Link" />
+    <axis xyz="-1 0 0" />
+  </joint>
+  <joint name="right_ring_MCP_joint" type="continuous">
+    <origin xyz="0.00439999999999724 -0.0135605309277429 0.01387090483558007" rpy="0 0 0" />
+    <parent link="right_ring_MPR_Link" />
+    <child link="right_ring_MCP_Link" />
+    <axis xyz="0 0.9961946980917457 0.08715574274765714" />
+  </joint>
+  <joint name="right_ring_PIP_joint" type="continuous">
+    <origin xyz="0.01200000000000038 -0.003660541195401379 0.04184017731985323" rpy="0 0 0" />
+    <parent link="right_ring_MCP_Link" />
+    <child link="right_ring_PIP_Link" />
+    <axis xyz="0 0.9961946980917461 0.08715574274765159" />
+  </joint>
+  <joint name="right_ring_DIP_joint" type="continuous">
+    <origin xyz="0 -0.002266049311439144 0.02590106215038568" rpy="0 0 0" />
+    <parent link="right_ring_PIP_Link" />
+    <child link="right_ring_DIP_Link" />
+    <axis xyz="0 0.9961946980917464 0.08715574274764676" />
+  </joint>
+  <joint name="right_little_MPR_joint" type="continuous">
+    <origin xyz="-0.002469429083494559 -0.03311593501713939 0.112883000812571" rpy="0 0 0" />
+    <parent link="right_palm_link" />
+    <child link="right_little_MPR_Link" />
+    <axis xyz="-0.9743700647852501 -0.2249510543437999 0" />
+  </joint>
+  <joint name="right_little_MCP_joint" type="continuous">
+    <origin xyz="0.007721630888533861 -0.01388624738043698 0.01196655966059446" rpy="0 0 0" />
+    <parent link="right_little_MPR_Link" />
+    <child link="right_little_MCP_Link" />
+    <axis xyz="-0.2195686975751809 0.9510565162951539 0.2174421528997179" />
+  </joint>
+  <joint name="right_little_PIP_joint" type="continuous">
+    <origin xyz="0.01325768370713774 -0.004080399335328111 0.03123434270135539" rpy="0 0 0" />
+    <parent link="right_little_MCP_Link" />
+    <child link="right_little_PIP_Link" />
+    <axis xyz="-0.2195686975751815 0.9510565162951529 0.2174421528997226" />
+  </joint>
+  <joint name="right_little_DIP_joint" type="continuous">
+    <origin xyz="0.0009782768310716457 -0.004237382492159214 0.0195214641883481" rpy="0 0 0" />
+    <parent link="right_little_PIP_Link" />
+    <child link="right_little_DIP_Link" />
+    <axis xyz="-0.2195686975751812 0.9510565162951521 0.2174421528997258" />
+  </joint>
+  <joint name="left_right_joint" type="fixed">
+    <origin xyz="0 -0.3 0" rpy="0 0 0" />
+    <parent link="left_palm_link" />
+    <child link="right_palm_link" />
+  </joint>
+  <!-- BEGIN wrist_cameras: 由 model.yaml 的 wrist_cameras 生成，不要手改 -->
+  <!-- 腕部相机 uvc_3080（型号值，source: calibrated）；逐台标定值不在这里，经 SDK 按手套序列号取。
+       *_camera_optical_frame：z 朝前（光轴）、x 朝画面右、y 朝画面下，对应录制端转正之后的画面；
+       = camera_Link 绕 +Z 转 optical_inplane_deg（270°）。 -->
+  <link name="left_camera_Link" />
+  <joint name="left_camera_joint" type="fixed">
+    <origin xyz="0.063179 0.046426 0.054197" rpy="0.554751 0.11603 0.033168" />
+    <parent link="left_palm_link" />
+    <child link="left_camera_Link" />
+  </joint>
+  <link name="left_camera_optical_frame" />
+  <joint name="left_camera_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0.0 0.0 4.71238898038469" />
+    <parent link="left_camera_Link" />
+    <child link="left_camera_optical_frame" />
+  </joint>
+  <link name="right_camera_Link" />
+  <joint name="right_camera_joint" type="fixed">
+    <origin xyz="0.062258 -0.050613 0.053328" rpy="-0.548455 0.130451 -0.043363" />
+    <parent link="right_palm_link" />
+    <child link="right_camera_Link" />
+  </joint>
+  <link name="right_camera_optical_frame" />
+  <joint name="right_camera_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0.0 0.0 4.71238898038469" />
+    <parent link="right_camera_Link" />
+    <child link="right_camera_optical_frame" />
+  </joint>
+  <!-- END wrist_cameras -->
+</robot>
